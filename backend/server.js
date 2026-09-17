@@ -9,6 +9,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const supabase = require('./config/supabase');
+const certificateRoutes = require('./routes/certificateRoutes');
 
 // 3. Initialize Express application instance
 const app = express();
@@ -21,6 +22,20 @@ app.use(cors());
 app.use(express.json());
 
 // 6. Routes
+
+// GET / - Root health check & API directory
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: "Student Micro-Credential Verification Engine Backend is running",
+    status: "online",
+    endpoints: {
+      test: "GET /api/test",
+      databaseTest: "GET /api/database-test",
+      uploadCertificate: "POST /api/certificates/upload"
+    },
+    frontendApp: "http://localhost:3000"
+  });
+});
 
 // GET /api/test - simple endpoint to verify backend is running
 app.get('/api/test', (req, res) => {
@@ -53,9 +68,14 @@ app.get('/api/database-test', async (req, res) => {
   }
 });
 
+// Mount Certificate Routes (handles POST /api/certificates/upload)
+app.use('/api/certificates', certificateRoutes);
+
 // 7. Start listening for incoming network requests
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Root API: http://localhost:${PORT}/`);
   console.log(`Test API: http://localhost:${PORT}/api/test`);
   console.log(`Database Test API: http://localhost:${PORT}/api/database-test`);
+  console.log(`Upload Certificate API: POST http://localhost:${PORT}/api/certificates/upload`);
 });
