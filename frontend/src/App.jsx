@@ -1,59 +1,142 @@
-import React, { useState, useEffect } from 'react';
-import { getTestMessage } from './services/api';
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+
+// Global Navigation Component
+import Navbar from './components/Navbar';
+
+// Layouts
+import MainLayout from './layouts/MainLayout';
+import DashboardLayout from './layouts/DashboardLayout';
+
+// Pages
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import UploadCertificate from './pages/UploadCertificate';
+import Certificates from './pages/Certificates';
+import Skills from './pages/Skills';
+import Badges from './pages/Badges';
+import Portfolio from './pages/Portfolio';
+import Transcript from './pages/Transcript';
+import Verify from './pages/Verify';
+import Admin from './pages/Admin';
 
 /**
- * App Component
+ * Root Application Component
  * 
- * Demonstrates connection between React frontend and Express backend.
- * Fetches and displays message from GET /api/test.
+ * Configures global Navbar and client-side routing with React Router.
+ * The Navbar is placed directly inside BrowserRouter so it appears on every page
+ * without duplication.
  */
 function App() {
-  const [backendMessage, setBackendMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    // Fetch test message from Express backend on component mount
-    getTestMessage()
-      .then((data) => {
-        setBackendMessage(data.message);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Error connecting to backend:', err);
-        setError('Cannot connect to backend. Please ensure the Express server is running on http://localhost:5000');
-        setLoading(false);
-      });
-  }, []);
-
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 text-slate-800">
-      <main className="max-w-md w-full bg-white shadow-sm rounded-xl p-8 border border-slate-200 text-center">
-        <h1 className="text-2xl font-bold text-slate-900 mb-6">
-          Student Micro-Credential Verification Engine
-        </h1>
+    <BrowserRouter>
+      {/* Global Navbar rendered once across all routes */}
+      <Navbar />
 
-        <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-2">
-            Frontend connected:
-          </h2>
+      <Routes>
+        {/* Public Pages */}
+        <Route
+          path="/"
+          element={
+            <MainLayout>
+              <Home />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <MainLayout>
+              <Login />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <MainLayout>
+              <Register />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/verify"
+          element={
+            <MainLayout>
+              <Verify />
+            </MainLayout>
+          }
+        />
 
-          {loading && (
-            <p className="text-slate-500">Connecting to backend...</p>
-          )}
-
-          {error && (
-            <p className="text-red-600 text-sm">{error}</p>
-          )}
-
-          {backendMessage && (
-            <p className="text-xl font-bold text-emerald-600">
-              {backendMessage}
-            </p>
-          )}
-        </div>
-      </main>
-    </div>
+        {/* Dashboard & Workspace Pages */}
+        <Route
+          path="/dashboard"
+          element={
+            <DashboardLayout>
+              <Dashboard />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/upload"
+          element={
+            <DashboardLayout>
+              <UploadCertificate />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/certificates"
+          element={
+            <DashboardLayout>
+              <Certificates />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/skills"
+          element={
+            <DashboardLayout>
+              <Skills />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/badges"
+          element={
+            <DashboardLayout>
+              <Badges />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/portfolio"
+          element={
+            <DashboardLayout>
+              <Portfolio />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/transcript"
+          element={
+            <DashboardLayout>
+              <Transcript />
+            </DashboardLayout>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <DashboardLayout>
+              <Admin />
+            </DashboardLayout>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
