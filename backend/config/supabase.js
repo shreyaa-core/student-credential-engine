@@ -2,29 +2,47 @@
 // Supabase Database Connection Configuration
 // ==============================================================================
 
-// 1. Ensure environment variables from .env are loaded into process.env
-require('dotenv').config();
+const path = require('path');
+
+// 1. Ensure environment variables from backend/.env are reliably loaded into process.env
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 // 2. Import createClient from official Supabase JavaScript SDK
 const { createClient } = require('@supabase/supabase-js');
 
 // 3. Read Supabase URL and Key from environment variables
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
+const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+const supabaseKey = (process.env.SUPABASE_KEY || '').trim();
 
-// 4. Log warning if credentials are not configured in .env yet
-if (!supabaseUrl || !supabaseKey) {
-  console.warn(
-    '⚠️  [Supabase Warning]: SUPABASE_URL or SUPABASE_KEY is missing in your .env file.'
-  );
-}
-
-// 5. Initialize Supabase client
-// (Uses placeholders as fallback so the server can boot even before real credentials are added)
-const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseKey || 'placeholder-key'
+// 4. Determine if valid credentials are provided
+const isConfigured = Boolean(
+  supabaseUrl &&
+  supabaseKey &&
+  !supabaseUrl.includes('placeholder') &&
+  !supabaseUrl.includes('your-project-id') &&
+  !supabaseKey.includes('placeholder')
 );
 
-// 6. Export the initialized Supabase client
+// 5. Initialize Supabase client
+let supabase;
+
+if (isConfigured) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false },
+    });
+    console.log('✅ Supabase client initialized with provided credentials.');
+  } catch (initErr) {
+    console.warn('⚠️  Supabase client initialization warning:', initErr.message);
+    supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
+  }
+} else {
+  console.log('ℹ️  [Supabase]: No live credentials in .env yet. Running in development mode.');
+  supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
+}
+
+// 6. Attach connection status metadata
+supabase.isConfigured = isConfigured;
+
+// 7. Export the initialized Supabase client
 module.exports = supabase;
