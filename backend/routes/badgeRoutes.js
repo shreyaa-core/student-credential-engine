@@ -3,7 +3,7 @@
 // ==============================================================================
 
 const express = require('express');
-const supabase = require('../config/supabase');
+const pool = require('../config/database');
 const { generateBadge } = require('../services/badgeService');
 const { generateQRCode } = require('../services/qrService');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
@@ -14,29 +14,29 @@ const router = express.Router();
  * GET /api/badges
  * 
  * Purpose:
- * Fetch all badges from Supabase 'badges' table.
+ * Fetch badges from PostgreSQL 'badges' table strictly for the authenticated user.
  */
-router.get(['/', '/api/badges'], async (req, res) => {
+router.get(['/', '/api/badges'], requireAuth, async (req, res) => {
   try {
     let badges = [];
+    const isAdmin = (req.user?.role || '').toLowerCase() === 'admin';
 
-    if (supabase.isConfigured) {
-      const { data, error } = await supabase
-        .from('badges')
-        .select('id, student_id, certificate_id, name, image_url, criteria, created_at')
-        .order('created_at', { ascending: false });
+    try {
+      const query = isAdmin
+        ? 'SELECT id, student_id, certificate_id, name, image_url, criteria, created_at FROM badges ORDER BY created_at DESC'
+        : 'SELECT id, student_id, certificate_id, name, image_url, criteria, created_at FROM badges WHERE student_id = $1 ORDER BY created_at DESC';
+      const params = isAdmin ? [] : [req.user.id];
 
-      if (!error && Array.isArray(data)) {
-        badges = data;
-      } else if (error) {
-        console.warn('Notice: Error querying badges table from Supabase:', error.message);
-      }
+      const result = await pool.query(query, params);
+      badges = result.rows || [];
+    } catch (dbErr) {
+      console.warn('Notice: Error querying badges table from PostgreSQL:', dbErr.message);
     }
 
     const formattedBadges = badges.map((badge) => ({
       id: badge.id,
       name: badge.name,
-      criteria: badge.criteria || 'Verified Milestone Achievement',
+      criteria: badge.criteria || null,
       image_url: badge.image_url || '',
       imageUrl: badge.image_url || '',
       icon: badge.image_url || '🏅',
@@ -47,7 +47,7 @@ router.get(['/', '/api/badges'], async (req, res) => {
             day: 'numeric',
             year: 'numeric',
           })
-        : 'Recent',
+        : null,
       certificate_id: badge.certificate_id,
       student_id: badge.student_id,
     }));
@@ -69,9 +69,9 @@ router.get(['/create', '/api/badges/create'], (req, res) => {
     method: "POST",
     endpoint: "/api/badges/create",
     examplePayload: {
-      studentName: "Rahul Das",
+      studentName: "Student Name",
       courseName: "Machine Learning with Python",
-      issuer: "NPTEL",
+      issuer: "Credential Authority",
       skills: ["Machine Learning", "Python"]
     }
   });
@@ -81,13 +81,14 @@ router.get(['/create', '/api/badges/create'], (req, res) => {
  * POST /api/badges/create
  * 
  * Process:
- * 1. Authenticate and authorize request (Teacher, Admin, or Student)
+ * 1. Authenticate and authorize request (Issuer or Admin)
  * 2. Generate badge using badgeService
  * 3. Create verification URL
  * 4. Generate QR code using qrService
- * 5. Return response
+ * 5. Record badge into PostgreSQL 'badges' table if profile exists
+ * 6. Return response
  */
-router.post(['/create', '/api/badges/create'], requireAuth, requireRole('teacher', 'admin', 'student'), async (req, res) => {
+router.post(['/create', '/api/badges/create'], requireAuth, requireRole('issuer', 'admin'), async (req, res) => {
   try {
     const {
       studentName = '',
@@ -114,7 +115,34 @@ router.post(['/create', '/api/badges/create'], requireAuth, requireRole('teacher
     // 3. Generate QR code for the verification URL
     const qrCode = await generateQRCode(verificationUrl);
 
-    // 4. Return response
+    // 4. Record badge into PostgreSQL 'badges' table
+    try {
+      let studentId = req.user?.id;
+      if (studentId) {
+        const profCheck = await pool.query('SELECT id FROM profiles WHERE id = $1', [studentId]);
+        if (profCheck.rows.length > 0) {
+          const badgeTitle = badge.badgeName || `${courseName || 'Credential'} Badge`;
+          const criteriaText = Array.isArray(skills) && skills.length > 0
+            ? `Demonstrated competency in ${skills.join(', ')}`
+            : 'Verified Milestone Achievement';
+
+          await pool.query(
+            `INSERT INTO badges (student_id, name, image_url, criteria, created_at)
+             VALUES ($1, $2, $3, $4, NOW())`,
+            [
+              studentId,
+              badgeTitle,
+              '🏅',
+              criteriaText
+            ]
+          );
+        }
+      }
+    } catch (dbErr) {
+      console.warn('Notice: Error logging badge into PostgreSQL:', dbErr.message);
+    }
+
+    // 5. Return response
     return res.status(201).json({
       badge,
       qrCode,

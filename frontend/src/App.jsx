@@ -8,6 +8,9 @@ import Navbar from './components/Navbar';
 import MainLayout from './layouts/MainLayout';
 import DashboardLayout from './layouts/DashboardLayout';
 
+// Route Guards
+import ProtectedRoute from './components/ProtectedRoute';
+
 // Pages
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -18,6 +21,7 @@ import Certificates from './pages/Certificates';
 import Skills from './pages/Skills';
 import Badges from './pages/Badges';
 import Portfolio from './pages/Portfolio';
+import Profile from './pages/Profile';
 import Transcript from './pages/Transcript';
 import Verify from './pages/Verify';
 import Admin from './pages/Admin';
@@ -33,7 +37,7 @@ function App() {
   return (
     <BrowserRouter>
       {/* Global Navbar rendered once across all routes */}
-      <Navbar />
+        <Navbar />
 
       <Routes>
         {/* Public Pages */}
@@ -69,70 +73,105 @@ function App() {
             </MainLayout>
           }
         />
+        <Route
+          path="/verify/:id"
+          element={
+            <MainLayout>
+              <Verify />
+            </MainLayout>
+          }
+        />
 
-        {/* Dashboard & Workspace Pages */}
+        {/* Protected Dashboard & Workspace Pages */}
         <Route
           path="/dashboard"
           element={
-            <DashboardLayout>
-              <Dashboard />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Dashboard />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/upload"
           element={
-            <DashboardLayout>
-              <UploadCertificate />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <UploadCertificate />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/certificates"
           element={
-            <DashboardLayout>
-              <Certificates />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Certificates />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/skills"
           element={
-            <DashboardLayout>
-              <Skills />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Skills />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/badges"
           element={
-            <DashboardLayout>
-              <Badges />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Badges />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/portfolio"
           element={
-            <DashboardLayout>
-              <Portfolio />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Portfolio />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Profile />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/transcript"
           element={
-            <DashboardLayout>
-              <Transcript />
-            </DashboardLayout>
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Transcript />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
+        {/* Strictly Guarded Admin Route */}
         <Route
           path="/admin"
           element={
-            <DashboardLayout>
-              <Admin />
-            </DashboardLayout>
+            <ProtectedRoute allowedRoles={['admin', 'Admin']}>
+              <DashboardLayout>
+                <Admin />
+              </DashboardLayout>
+            </ProtectedRoute>
           }
         />
       </Routes>

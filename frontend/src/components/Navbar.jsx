@@ -1,30 +1,45 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Navbar Component
  * 
- * Clean, reusable navigation bar for the Student Credential Engine.
- * Built with Tailwind CSS and React Router Link.
+ * Clean, reactive navigation bar for the Student Credential Engine.
+ * Dynamically reflects logged-in user credentials, role badges, and logout controls.
  */
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
 
-  const links = [
-    { label: 'Home', path: '/' },
-    { label: 'Dashboard', path: '/dashboard' },
-    { label: 'Certificates', path: '/certificates' },
-    { label: 'Skills', path: '/skills' },
-    { label: 'Badges', path: '/badges' },
-    { label: 'Portfolio', path: '/portfolio' },
-  ];
+  const links = isAuthenticated
+    ? [
+        { label: 'Portfolio', path: '/portfolio' },
+        { label: 'Profile', path: '/profile' },
+        { label: 'Dashboard', path: '/dashboard' },
+        { label: 'Certificates', path: '/certificates' },
+        { label: 'Skills', path: '/skills' },
+        { label: 'Badges', path: '/badges' },
+      ]
+    : [
+        { label: 'Home', path: '/' },
+        { label: 'Verify Credential', path: '/verify' },
+      ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
+  const userInitial = (user?.name || user?.email || 'U').charAt(0).toUpperCase();
 
   return (
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Project Name & Brand Logo */}
-          <Link to="/" className="flex items-center gap-3">
+          <Link to={isAuthenticated ? '/portfolio' : '/'} className="flex items-center gap-3">
             <span className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
               🎓
             </span>
@@ -45,13 +60,52 @@ function Navbar() {
               </Link>
             ))}
 
-            {/* Login Link */}
-            <Link
-              to="/login"
-              className="ml-4 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
-            >
-              Login
-            </Link>
+            {/* Authenticated User Status vs Login / Register Buttons */}
+            {isAuthenticated && user ? (
+              <div className="ml-4 pl-4 border-l border-slate-200 flex items-center gap-3">
+                {/* User Avatar & Name */}
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-2.5 p-1 rounded-lg hover:bg-slate-50 transition-colors"
+                  title={`View profile (${user.email})`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                    {userInitial}
+                  </div>
+                  <div className="text-left hidden lg:block">
+                    <p className="text-xs font-bold text-slate-800 leading-none truncate max-w-[120px]">
+                      {user.name || user.email?.split('@')[0]}
+                    </p>
+                    <span className="inline-block mt-0.5 text-[10px] font-semibold text-indigo-600 uppercase tracking-wider">
+                      {user.role || 'Issuer'}
+                    </span>
+                  </div>
+                </Link>
+
+                {/* Logout Button */}
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="ml-4 flex items-center gap-2">
+                <Link
+                  to="/login"
+                  className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
+                >
+                  Create Account
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Mobile Menu Toggle Button */}
@@ -87,14 +141,50 @@ function Navbar() {
               {link.label}
             </Link>
           ))}
-          <div className="pt-2">
-            <Link
-              to="/login"
-              onClick={() => setIsOpen(false)}
-              className="block w-full text-center px-4 py-2.5 rounded-lg text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
-            >
-              Login
-            </Link>
+
+          {/* Mobile Auth Section */}
+          <div className="pt-3 mt-2 border-t border-slate-100">
+            {isAuthenticated && user ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs">
+                    {userInitial}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">{user.email}</p>
+                    <span className="text-[10px] font-semibold text-indigo-600 uppercase">
+                      {user.role || 'Issuer'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full text-center px-4 py-2 rounded-lg text-sm font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Link
+                  to="/login"
+                  onClick={() => setIsOpen(false)}
+                  className="block w-full text-center px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setIsOpen(false)}
+                  className="block w-full text-center px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
+                >
+                  Create Account
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

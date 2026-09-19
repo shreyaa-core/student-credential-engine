@@ -3,7 +3,8 @@
 // ==============================================================================
 
 const express = require('express');
-const supabase = require('../config/supabase');
+const pool = require('../config/database');
+const { requireAuth } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
@@ -11,9 +12,7 @@ const router = express.Router();
  * GET /api/skills
  * 
  * Purpose:
- * Fetches skills matrix from Supabase tables:
- * - 'skills'
- * - 'certificate_skills'
+ * Fetches verified skills matrix earned strictly through the authenticated user's certificates.
  * 
  * Return fields:
  * - id
@@ -22,73 +21,45 @@ const router = express.Router();
  * - level / proficiency_level
  * - verifiedCertificatesCount
  */
-router.get(['/', '/api/skills'], async (req, res) => {
+router.get(['/', '/api/skills'], requireAuth, async (req, res) => {
   try {
+    const studentId = req.user.id;
     let skillsList = [];
 
-    if (supabase.isConfigured) {
-      // 1. Try relational query joining skills with certificate_skills
-      const { data, error } = await supabase
-        .from('skills')
-        .select(`
-          id,
-          name,
-          category,
-          created_at,
-          certificate_skills (
-            id,
-            certificate_id,
-            proficiency_level
-          )
-        `)
-        .order('name', { ascending: true });
+    try {
+      const query = `
+        SELECT 
+          s.id, 
+          s.name, 
+          s.category, 
+          COUNT(cs.id)::int AS "verifiedCertificatesCount",
+          COALESCE(MAX(cs.proficiency_level), 'Intermediate') AS proficiency_level
+        FROM certificates c
+        JOIN certificate_skills cs ON c.id = cs.certificate_id
+        JOIN skills s ON cs.skill_id = s.id
+        WHERE c.student_id = $1
+        GROUP BY s.id, s.name, s.category
+        ORDER BY s.name ASC;
+      `;
 
-      if (!error && Array.isArray(data)) {
-        skillsList = data.map((s) => {
-          const certSkills = Array.isArray(s.certificate_skills) ? s.certificate_skills : [];
-          const topLevel =
-            certSkills.length > 0 && certSkills[0].proficiency_level
-              ? certSkills[0].proficiency_level
-              : 'Intermediate';
+      const result = await pool.query(query, [studentId]);
 
-          return {
-            id: s.id,
-            name: s.name,
-            category: s.category || 'General',
-            level: topLevel,
-            proficiency_level: topLevel,
-            verifiedCertificatesCount: certSkills.length,
-            verified_certificates_count: certSkills.length,
-          };
-        });
-      } else {
-        // Fallback: Query tables independently if FK relationships differ
-        const [skillsRes, certSkillsRes] = await Promise.all([
-          supabase.from('skills').select('id, name, category, created_at').order('name', { ascending: true }),
-          supabase.from('certificate_skills').select('id, skill_id, proficiency_level'),
-        ]);
+      skillsList = (result.rows || []).map((s) => {
+        const topLevel = s.proficiency_level || 'Intermediate';
+        const certCount = parseInt(s.verifiedCertificatesCount, 10) || 0;
 
-        const rawSkills = Array.isArray(skillsRes.data) ? skillsRes.data : [];
-        const rawCertSkills = Array.isArray(certSkillsRes.data) ? certSkillsRes.data : [];
-
-        skillsList = rawSkills.map((s) => {
-          const matches = rawCertSkills.filter((cs) => cs.skill_id === s.id);
-          const topLevel =
-            matches.length > 0 && matches[0].proficiency_level
-              ? matches[0].proficiency_level
-              : 'Intermediate';
-
-          return {
-            id: s.id,
-            name: s.name,
-            category: s.category || 'General',
-            level: topLevel,
-            proficiency_level: topLevel,
-            verifiedCertificatesCount: matches.length,
-            verified_certificates_count: matches.length,
-          };
-        });
-      }
+        return {
+          id: s.id,
+          name: s.name,
+          category: s.category || 'General',
+          level: topLevel,
+          proficiency_level: topLevel,
+          verifiedCertificatesCount: certCount,
+          verified_certificates_count: certCount,
+        };
+      });
+    } catch (dbErr) {
+      console.warn('Notice: Error querying user skills from PostgreSQL:', dbErr.message);
     }
 
     return res.status(200).json(skillsList);

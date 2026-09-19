@@ -10,7 +10,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 // 2. Import external packages & configuration
 const express = require('express');
 const cors = require('cors');
-const supabase = require('./config/supabase');
+const pool = require('./config/database');
 const certificateRoutes = require('./routes/certificateRoutes');
 const badgeRoutes = require('./routes/badgeRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -65,24 +65,14 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// GET /api/database-test - connects to Supabase to verify database connectivity
+// GET /api/database-test - connects to PostgreSQL to verify database connectivity
 app.get('/api/database-test', async (req, res) => {
   try {
-    // If Supabase live credentials are configured in .env, verify connection
-    if (supabase.isConfigured) {
-      const { error } = await supabase.from('profiles').select('id').limit(1);
-
-      if (error && error.code !== 'PGRST116' && error.code !== '42P01') {
-        if (error.message && (error.message.includes('fetch failed') || error.message.includes('Invalid API key'))) {
-          return res.status(500).json({
-            error: error.message
-          });
-        }
-      }
-    }
+    const result = await pool.query('SELECT NOW()');
 
     return res.status(200).json({
-      message: "Supabase connected successfully"
+      message: "PostgreSQL connected successfully",
+      timestamp: result.rows[0]?.now
     });
   } catch (err) {
     return res.status(500).json({
@@ -132,5 +122,5 @@ app.listen(PORT, () => {
   console.log(`Upload Certificate API: POST http://localhost:${PORT}/api/certificates/upload`);
   console.log(`Badge API: POST http://localhost:${PORT}/api/badges/create`);
   console.log(`Admin Certificates API: GET http://localhost:${PORT}/api/admin/certificates`);
-  console.log(`Admin Status API: PUT http://localhost:${PORT}/api/admin/certificates/:id/status`);
+  console.log(`Admin Status API: GET/PUT http://localhost:${PORT}/api/admin/certificates/:id/status`);
 });

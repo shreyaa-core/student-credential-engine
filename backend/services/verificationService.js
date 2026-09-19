@@ -24,11 +24,7 @@ const KNOWN_ISSUERS = [
   'College',
 ];
 
-// In-memory set to simulate duplicate certificate ID detection without a database
-const existingCertificateIds = new Set([
-  'DUPLICATE_SAMPLE_001',
-  'REVOKED_HASH_999',
-]);
+// Real duplicate detection is performed against PostgreSQL using file_hash
 
 /**
  * Verifies extracted certificate information using point-based rules.
@@ -166,7 +162,8 @@ function verifyCertificate(certificate = {}) {
     });
   }
 
-  // 6. Rule: Verification URL exists (20 points)
+  // 6. Rule: Verification URL syntax check (0 authenticity points)
+  // Mere syntax does NOT confer authenticity points or prove reachability.
   const hasVerificationUrl = Boolean(
     verificationUrl &&
       verificationUrl.trim().length > 0 &&
@@ -174,16 +171,15 @@ function verifyCertificate(certificate = {}) {
   );
 
   if (hasVerificationUrl) {
-    score += 20;
     checks.push({
-      rule: 'Verification URL exists',
-      points: 20,
+      rule: 'Verification URL syntax',
+      points: 0,
       passed: true,
-      message: `Verification URL "${verificationUrl}" is valid and reachable.`,
+      message: `Verification URL format "${verificationUrl}" is syntactically valid. Authenticity must be confirmed via the official issuing authority.`,
     });
   } else {
     checks.push({
-      rule: 'Verification URL exists',
+      rule: 'Verification URL syntax',
       points: 0,
       passed: false,
       message: verificationUrl
@@ -192,8 +188,8 @@ function verifyCertificate(certificate = {}) {
     });
   }
 
-  // 7. Rule: No duplicate (10 points)
-  const isDuplicate = hasCertificateId && existingCertificateIds.has(certificateId.trim());
+  // 7. Rule: No duplicate (10 points) - Determined via PostgreSQL file_hash check
+  const isDuplicate = Boolean(certificate.isDuplicate);
 
   if (!isDuplicate) {
     score += 10;
@@ -201,27 +197,21 @@ function verifyCertificate(certificate = {}) {
       rule: 'No duplicate',
       points: 10,
       passed: true,
-      message: 'Certificate ID is unique and not registered previously.',
+      message: 'Certificate file SHA-256 hash is unique and not registered previously.',
     });
   } else {
     checks.push({
       rule: 'No duplicate',
       points: 0,
       passed: false,
-      message: `Certificate ID "${certificateId}" already exists in the registry.`,
+      message: 'Certificate file has already been registered in the database.',
     });
   }
 
-  // Determine verification status from total score
-  let status = 'SUSPICIOUS';
-
-  if (score >= 80) {
-    status = 'VERIFIED';
-  } else if (score >= 50) {
-    status = 'MANUAL REVIEW';
-  } else {
-    status = 'SUSPICIOUS';
-  }
+  // Note: Heuristic rules evaluate structural metadata completeness only.
+  // Real authenticity is determined strictly by the issuer verification service.
+  // Heuristic point scoring NEVER independently confers VERIFIED status.
+  const status = 'PENDING';
 
   return {
     score,

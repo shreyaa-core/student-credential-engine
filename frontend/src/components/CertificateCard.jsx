@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 /**
  * CertificateCard Component
@@ -8,19 +9,21 @@ import React from 'react';
  * - Issuer
  * - Date
  * - Status
- * 
- * Provides sensible dummy defaults for all props.
+ * - Real verification link
  */
 function CertificateCard({
+  id,
   certificateName = 'Full-Stack Web Development & System Design',
   title, // backwards compatibility fallback
   issuer = 'MIT Open Learning',
   date = 'March 15, 2026',
   issueDate, // backwards compatibility fallback
   status = 'Verified',
+  onVerify,
 }) {
   const displayName = certificateName || title;
   const displayDate = date || issueDate;
+  const verifyLink = id ? `/verify/${id}` : '/verify';
 
   // Compute status badge colors using Tailwind CSS
   const getStatusStyles = (currentStatus) => {
@@ -71,13 +74,24 @@ function CertificateCard({
       {/* Date & Footer */}
       <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
         <span>Date: {displayDate}</span>
-        <button
-          type="button"
-          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-        >
-          View Credential →
-        </button>
+        {onVerify ? (
+          <button
+            type="button"
+            onClick={onVerify}
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+          >
+            View Credential →
+          </button>
+        ) : (
+          <Link
+            to={verifyLink}
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+          >
+            View Credential →
+          </Link>
+        )}
       </div>
+
     </div>
   );
 }

@@ -3,17 +3,20 @@
 // ==============================================================================
 
 const express = require('express');
-const supabase = require('../config/supabase');
+const pool = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 const router = express.Router();
+
+// Admin authentication & authorization middleware:
+// Strictly enforces valid authentication (HTTP 401) and admin role authorization (HTTP 403).
+const adminAuth = [requireAuth, requireRole('admin')];
 
 /**
  * 1. GET /api/admin/certificates
  * 
  * Purpose:
- * Get all uploaded certificates from the Supabase database.
- * Protected: Requires valid JWT and Admin role.
+ * Get all uploaded certificates from the PostgreSQL database.
  * 
  * Return:
  * Array of certificates with:
@@ -24,58 +27,17 @@ const router = express.Router();
  * - verification_score
  * - created_at
  */
-router.get(['/certificates', '/api/admin/certificates'], requireAuth, requireRole('admin'), async (req, res) => {
+router.get(['/certificates', '/'], adminAuth, async (req, res) => {
   try {
-    // Query certificates table for administrative review
-    const { data, error } = await supabase
-      .from('certificates')
-      .select('id, certificate_name, issuer, status, verification_score, created_at')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      // Fallback query if verification_score column is not yet added to table
-      if (error.code === '42703' || (error.message && error.message.includes('verification_score'))) {
-        const fallback = await supabase
-          .from('certificates')
-          .select('id, certificate_name, issuer, status, created_at')
-          .order('created_at', { ascending: false });
-
-        if (!fallback.error) {
-          const formattedFallback = (fallback.data || []).map((item) => ({
-            id: item.id,
-            certificate_name: item.certificate_name,
-            issuer: item.issuer,
-            status: item.status,
-            verification_score: item.verification_score !== undefined ? item.verification_score : 0,
-            created_at: item.created_at,
-          }));
-          return res.status(200).json(formattedFallback);
-        }
-      }
-
-      console.warn('Database query notice (using fallback list):', error.message);
-      return res.status(200).json([
-        {
-          id: 'cert-sample-1',
-          certificate_name: 'Full Stack Web Development',
-          issuer: 'Coursera / DeepLearning.AI',
-          status: 'PENDING',
-          verification_score: 88,
-          created_at: new Date().toISOString(),
-        },
-        {
-          id: 'cert-sample-2',
-          certificate_name: 'Machine Learning Specialization',
-          issuer: 'Stanford Online',
-          status: 'APPROVED',
-          verification_score: 95,
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-        }
-      ]);
-    }
+    // Query certificates table from PostgreSQL for administrative review
+    const result = await pool.query(`
+      SELECT id, certificate_name, issuer, status, verification_score, created_at 
+      FROM certificates 
+      ORDER BY created_at DESC;
+    `);
 
     // Ensure all requested fields are normalized in the response
-    const certificates = (data || []).map((item) => ({
+    const certificates = (result.rows || []).map((item) => ({
       id: item.id,
       certificate_name: item.certificate_name,
       issuer: item.issuer,
@@ -86,26 +48,68 @@ router.get(['/certificates', '/api/admin/certificates'], requireAuth, requireRol
 
     return res.status(200).json(certificates);
   } catch (err) {
-    console.warn('Error fetching certificates (using fallback list):', err.message);
-    return res.status(200).json([
-      {
-        id: 'cert-sample-1',
-        certificate_name: 'Full Stack Web Development',
-        issuer: 'Coursera / DeepLearning.AI',
-        status: 'PENDING',
-        verification_score: 88,
-        created_at: new Date().toISOString(),
-      }
-    ]);
+    console.error('Error fetching certificates for admin:', err.message);
+    return res.status(500).json({
+      error: err.message || 'Failed to fetch certificates for administration.',
+    });
   }
 });
 
 /**
- * 2. PUT /api/admin/certificates/:id/status
+ * 2. GET /api/admin/certificates/:id/status
+ * 
+ * Purpose:
+ * Check certificate status or view API instructions if testing in a web browser.
+ */
+router.get(['/certificates/:id/status', '/:id/status'], adminAuth, async (req, res) => {
+  const { id } = req.params;
+
+  // If user entered literal ':id' or a placeholder in the browser
+  if (!id || id === ':id' || id === 'placeholder') {
+    return res.status(200).json({
+      endpoint: 'PUT /api/admin/certificates/:id/status',
+      description: 'This endpoint is designed to update certificate verification status via HTTP PUT.',
+      instructions: 'To update status, send an HTTP PUT request with JSON payload or use the Admin Dashboard.',
+      expectedPayload: {
+        status: 'APPROVED | REJECTED | PENDING',
+        admin_notes: 'Optional remarks'
+      },
+      exampleUrl: 'http://localhost:5000/api/admin/certificates/<certificate-id>/status',
+      frontendAdminDashboard: 'http://localhost:3000/admin'
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, certificate_name, issuer, status, verification_score, admin_notes, created_at 
+       FROM certificates 
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: `Certificate with id "${id}" not found.`
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      certificate: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error fetching certificate status:', err.message);
+    return res.status(500).json({
+      error: err.message || 'Failed to fetch certificate status.'
+    });
+  }
+});
+
+/**
+ * 3. PUT /api/admin/certificates/:id/status
  * 
  * Purpose:
  * Update certificate status and optional administrative notes.
- * Protected: Requires valid JWT and Admin role.
  * 
  * Input:
  * {
@@ -114,12 +118,19 @@ router.get(['/certificates', '/api/admin/certificates'], requireAuth, requireRol
  * }
  * 
  * Database:
- * Updates certificates table in Supabase.
+ * Updates certificates table in PostgreSQL.
  */
-router.put(['/certificates/:id/status', '/api/admin/certificates/:id/status'], requireAuth, requireRole('admin'), async (req, res) => {
+router.put(['/certificates/:id/status', '/:id/status'], adminAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, admin_notes } = req.body;
+
+    // Check if literal ':id' was passed
+    if (id === ':id') {
+      return res.status(400).json({
+        error: "Please replace ':id' in the URL with a real certificate ID (e.g. /api/admin/certificates/<uuid>/status)."
+      });
+    }
 
     // Validation: status is required
     if (!status) {
@@ -128,54 +139,33 @@ router.put(['/certificates/:id/status', '/api/admin/certificates/:id/status'], r
       });
     }
 
-    // Build update payload
-    const updatePayload = {
-      status,
-    };
+    // Update certificate in PostgreSQL database
+    const updateQuery = `
+      UPDATE certificates 
+      SET status = $1, admin_notes = $2
+      WHERE id = $3
+      RETURNING id, certificate_name, issuer, status, verification_score, admin_notes, created_at;
+    `;
 
-    if (admin_notes !== undefined) {
-      updatePayload.admin_notes = admin_notes;
-    }
+    const result = await pool.query(updateQuery, [status, admin_notes || null, id]);
 
-    // Update certificate in Supabase database
-    let { data, error } = await supabase
-      .from('certificates')
-      .update(updatePayload)
-      .eq('id', id)
-      .select();
-
-    // Fallback if admin_notes column is not yet present in PostgreSQL schema
-    if (error && (error.code === '42703' || (error.message && error.message.includes('admin_notes')))) {
-      const fallback = await supabase
-        .from('certificates')
-        .update({ status })
-        .eq('id', id)
-        .select();
-
-      data = fallback.data;
-      error = fallback.error;
-    }
-
-    if (error) {
-      console.warn('Database update notice (simulating success):', error.message);
-      return res.status(200).json({
-        success: true,
-        message: 'Certificate status updated successfully',
-        certificate: { id, status, admin_notes },
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: `Certificate with id "${id}" not found.`,
       });
     }
 
+    const updatedCertificate = result.rows[0];
+
     return res.status(200).json({
       success: true,
       message: 'Certificate status updated successfully',
-      certificate: data && data[0] ? data[0] : { id, status, admin_notes },
+      certificate: updatedCertificate,
     });
   } catch (err) {
-    console.warn('Error updating certificate status (simulating success):', err.message);
-    return res.status(200).json({
-      success: true,
-      message: 'Certificate status updated successfully',
-      certificate: { id: req.params.id, status: req.body?.status, admin_notes: req.body?.admin_notes },
+    console.error('Error updating certificate status:', err.message);
+    return res.status(500).json({
+      error: err.message || 'Failed to update certificate status.',
     });
   }
 });

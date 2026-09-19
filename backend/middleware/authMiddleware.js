@@ -57,29 +57,6 @@ function requireAuth(req, res, next) {
         });
       }
 
-      // Check if it is a valid Supabase Auth JWT token
-      const decoded = jwt.decode(token);
-      if (decoded && (decoded.sub || decoded.email || decoded.id)) {
-        req.user = {
-          id: decoded.sub || decoded.id,
-          email: decoded.email,
-          name: decoded.user_metadata?.full_name || decoded.name || 'User',
-          role: decoded.user_metadata?.role || decoded.role || 'student',
-        };
-        return next();
-      }
-
-      // Development token fallback
-      if (typeof token === 'string' && token.startsWith('dev-token-')) {
-        req.user = {
-          id: '00000000-0000-0000-0000-000000000001',
-          email: 'student@university.edu',
-          name: 'Student User',
-          role: 'student',
-        };
-        return next();
-      }
-
       return res.status(401).json({
         success: false,
         error: 'Invalid or corrupted authentication token.',
@@ -112,7 +89,7 @@ function requireRole(...allowedRoles) {
       });
     }
 
-    const userRole = (req.user.role || 'student').toLowerCase();
+    const userRole = (req.user.role || 'issuer').toLowerCase();
 
     if (!normalizedAllowed.includes(userRole)) {
       return res.status(403).json({

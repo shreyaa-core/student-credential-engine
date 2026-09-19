@@ -1,51 +1,133 @@
 // ==============================================================================
-// Student Micro-Credential Verification Engine - Authentication Routes (Supabase Auth)
+// Student Micro-Credential Verification Engine - Authentication Routes (Local JWT + PostgreSQL)
 // ==============================================================================
 
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcrypt');
+const pool = require('../config/database');
 const { generateToken, requireAuth } = require('../middleware/authMiddleware');
-const supabase = require('../config/supabase');
 
 const router = express.Router();
 
 /**
- * Normalizes role string to standard format (Student, Teacher, Admin)
+ * Normalizes role string to standard format ('Issuer', 'Admin').
+ * Rejects invalid roles (returns null).
  */
-function normalizeRole(roleInput, email = '') {
+function normalizeRole(roleInput) {
   const r = (roleInput || '').trim().toLowerCase();
-  const em = (email || '').toLowerCase();
-
-  if (r === 'admin' || em.includes('admin')) {
+  if (r === 'admin') {
     return 'Admin';
   }
-  if (r === 'teacher' || r === 'issuer' || r === 'faculty' || em.includes('teacher') || em.includes('faculty')) {
-    return 'Teacher';
+  if (r === 'issuer') {
+    return 'Issuer';
   }
-  return 'Student';
+  return null;
 }
 
 /**
- * Normalizes role for profiles table DB check constraint ('student', 'issuer', 'verifier', 'admin')
+ * Normalizes role for profiles table DB check constraint ('issuer', 'admin').
+ * Defaults to 'issuer' for safe non-admin fallback.
  */
 function toDbRole(role) {
-  const r = (role || '').toLowerCase();
+  const r = (role || '').trim().toLowerCase();
   if (r === 'admin') return 'admin';
-  if (r === 'teacher' || r === 'issuer' || r === 'faculty') return 'issuer';
-  if (r === 'verifier') return 'verifier';
-  return 'student';
+  return 'issuer';
 }
+
+const dns = require('dns').promises;
+
+/**
+ * Validates password complexity:
+ * - Minimum 8 characters
+ * - At least 1 uppercase letter
+ * - At least 1 lowercase letter
+ * - At least 1 number
+ * - At least 1 special character
+ */
+function validatePassword(password) {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least 1 uppercase letter.';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must contain at least 1 lowercase letter.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least 1 number.';
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    return 'Password must contain at least 1 special character (!@#$%^&*...).';
+  }
+  return null;
+}
+
+/**
+ * Verifies that the email domain has valid MX or fallback A DNS records.
+ * Note: Verifies domain capability to receive email, does not prove individual mailbox.
+ */
+async function verifyEmailDomain(domain) {
+  try {
+    const mxRecords = await dns.resolveMx(domain);
+    if (Array.isArray(mxRecords) && mxRecords.length > 0) {
+      return true;
+    }
+  } catch (mxErr) {
+    // If no MX records found, check for A record fallback per RFC 5321
+    try {
+      const aRecords = await dns.resolve4(domain);
+      if (Array.isArray(aRecords) && aRecords.length > 0) {
+        return true;
+      }
+    } catch (aErr) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * GET /api/auth/register
+ * 
+ * Friendly response for web browser inspection
+ */
+router.get(['/register', '/api/auth/register'], (req, res) => {
+  return res.status(200).json({
+    message: "Registration endpoint is active. Send an HTTP POST request to create an account.",
+    method: "POST",
+    endpoint: "/api/auth/register",
+    requiredFields: {
+      name: "Full Name",
+      email: "issuer@example.com",
+      password: "securePassword123",
+      role: "Issuer | Admin",
+      institution: "Institution / Organization"
+    },
+    frontendApp: "http://localhost:3000/register"
+  });
+});
 
 /**
  * POST /api/auth/register
  * 
- * Email/password signup using Supabase Auth (supabase.auth.signUp).
- * Creates profile row in profiles table.
+ * Secure user registration:
+ * 1. Validate required fields
+ * 2. Normalize email to lowercase
+ * 3. Validate email syntax format
+ * 4. Verify domain MX / fallback A records via Node.js dns.promises
+ * 5. Check duplicate email in PostgreSQL profiles table
+ * 6. Validate password strength (min 8 chars, uppercase, lowercase, number, special char)
+ * 7. Hash password via bcrypt
+ * 8. Insert into PostgreSQL profiles table
+ * 9. Issue session JWT (no email sending, no verification tokens)
  */
-router.post('/register', async (req, res) => {
+router.post(['/register', '/api/auth/register'], async (req, res) => {
   try {
     const { name, fullName, email, password, role, institution } = req.body;
 
+    // 1. Validate required fields
     const chosenName = (name || fullName || '').trim();
     if (!chosenName) {
       return res.status(400).json({
@@ -61,88 +143,112 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    if (!password || password.length < 6) {
+    if (!password || !password.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'Password must be at least 6 characters long.',
+        error: 'Password is required.',
       });
     }
 
+    // 2. Normalize email to lowercase
     const cleanEmail = email.trim().toLowerCase();
-    const resolvedRole = normalizeRole(role, cleanEmail);
+
+    // 3. Validate email syntax
+    const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email address format. Please provide a valid email (e.g. name@domain.com).',
+      });
+    }
+
+    // 4. Validate email domain via DNS MX and fallback A records
+    const domain = cleanEmail.split('@')[1];
+    const isDomainValid = await verifyEmailDomain(domain);
+    if (!isDomainValid) {
+      return res.status(400).json({
+        success: false,
+        error: `The email domain "${domain}" could not be resolved or does not have valid mail server records. Please enter a valid email address.`,
+      });
+    }
+
+    // 5. Check duplicate email in PostgreSQL
+    const existing = await pool.query(
+      'SELECT id FROM profiles WHERE LOWER(email) = LOWER($1) LIMIT 1',
+      [cleanEmail]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'An account with this email address already exists. Please log in instead.',
+      });
+    }
+
+    // 6. Validate password complexity
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({
+        success: false,
+        error: passwordError,
+      });
+    }
+
+    // Role validation: Only 'Issuer' and 'Admin' are permitted
+    const requestedRole = (role || 'Issuer').trim();
+    const resolvedRole = normalizeRole(requestedRole);
+    if (!resolvedRole) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid role "${role}". Allowed roles are: Issuer, Admin.`,
+      });
+    }
+
     const dbRole = toDbRole(resolvedRole);
 
-    let authUser = null;
-    let sessionToken = null;
+    // 7. Hash password with bcrypt
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    if (supabase.isConfigured) {
-      // 1. Supabase Auth: Sign Up with email & password
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password: password,
-        options: {
-          data: {
-            full_name: chosenName,
-            role: resolvedRole,
-          },
-        },
-      });
+    // 8. Insert new user into PostgreSQL profiles table (without removed columns)
+    const userId = uuidv4();
+    const insertQuery = `
+      INSERT INTO profiles (id, full_name, email, password_hash, role, institution, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      RETURNING id, full_name, email, role, institution, created_at;
+    `;
 
-      if (authError) {
-        return res.status(400).json({
-          success: false,
-          error: authError.message,
-        });
-      }
+    const result = await pool.query(insertQuery, [
+      userId,
+      chosenName,
+      cleanEmail,
+      passwordHash,
+      dbRole,
+      institution ? institution.trim() : null,
+    ]);
 
-      authUser = authData?.user;
-      sessionToken = authData?.session?.access_token;
+    const newUser = result.rows[0];
 
-      // 2. Create profile row in profiles table
-      if (authUser) {
-        try {
-          await supabase.from('profiles').upsert(
-            {
-              id: authUser.id,
-              full_name: chosenName,
-              email: cleanEmail,
-              role: dbRole,
-              institution: institution || 'National Institute of Technology',
-              created_at: new Date().toISOString(),
-            },
-            { onConflict: 'email' }
-          );
-        } catch (dbErr) {
-          console.warn('Notice: Error upserting profile in database on registration:', dbErr.message);
-        }
-      }
-    }
-
-    // Fallback if running in offline development mode
-    if (!authUser) {
-      authUser = {
-        id: uuidv4(),
-        email: cleanEmail,
-      };
-    }
-
+    // Construct user payload - NEVER return password_hash
     const userPayload = {
-      id: authUser.id,
-      email: cleanEmail,
-      name: chosenName,
+      id: newUser.id,
+      email: newUser.email,
+      name: newUser.full_name,
       role: resolvedRole,
+      institution: newUser.institution,
     };
 
-    const token = sessionToken || generateToken(userPayload, '7d');
+    // Generate JWT session token
+    const token = generateToken(userPayload, '7d');
 
     return res.status(201).json({
       success: true,
-      message: 'Account registered successfully via Supabase Auth',
+      message: 'Account registered successfully',
       token,
       user: userPayload,
     });
   } catch (err) {
-    console.error('Register error:', err);
+    console.error('Register error:', err.message);
     return res.status(500).json({
       success: false,
       error: err.message || 'An unexpected error occurred during registration.',
@@ -151,14 +257,34 @@ router.post('/register', async (req, res) => {
 });
 
 /**
+ * GET /api/auth/login
+ * 
+ * Friendly response for web browser inspection
+ */
+router.get(['/login', '/api/auth/login'], (req, res) => {
+  return res.status(200).json({
+    message: "Login endpoint is active. Send an HTTP POST request with credentials to log in.",
+    method: "POST",
+    endpoint: "/api/auth/login",
+    requiredFields: {
+      email: "issuer@example.com",
+      password: "yourPassword"
+    },
+    frontendApp: "http://localhost:3000/login"
+  });
+});
+
+/**
  * POST /api/auth/login
  * 
- * Email/password login using Supabase Auth (supabase.auth.signInWithPassword).
- * After login: Create profile row in profiles table.
+ * Native email/password login:
+ * 1. Finds user in PostgreSQL 'profiles' table by email
+ * 2. Verifies password against bcrypt hash
+ * 3. Issues signed JWT session token
  */
-router.post('/login', async (req, res) => {
+router.post(['/login', '/api/auth/login'], async (req, res) => {
   try {
-    const { email, password, role } = req.body;
+    const { email, password } = req.body;
 
     if (!email || !email.trim()) {
       return res.status(400).json({
@@ -175,72 +301,48 @@ router.post('/login', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const resolvedRole = normalizeRole(role, cleanEmail);
-    const dbRole = toDbRole(resolvedRole);
-    const displayName = cleanEmail.split('@')[0].replace(/[._-]/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
 
-    let authUser = null;
-    let sessionToken = null;
+    // 1. Fetch user from PostgreSQL profiles table
+    const result = await pool.query(
+      'SELECT id, full_name, email, password_hash, role, institution FROM profiles WHERE LOWER(email) = LOWER($1) LIMIT 1',
+      [cleanEmail]
+    );
 
-    if (supabase.isConfigured) {
-      // 1. Supabase Auth: Sign In with email & password
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: password,
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password.',
       });
-
-      if (authError) {
-        return res.status(401).json({
-          success: false,
-          error: authError.message || 'Invalid login credentials.',
-        });
-      }
-
-      authUser = authData?.user;
-      sessionToken = authData?.session?.access_token;
-
-      // 2. After login: Create profile row in profiles table
-      if (authUser) {
-        try {
-          const profileFullName = authUser.user_metadata?.full_name || displayName;
-          await supabase.from('profiles').upsert(
-            {
-              id: authUser.id,
-              full_name: profileFullName,
-              email: cleanEmail,
-              role: dbRole,
-              institution: 'National Institute of Technology',
-              created_at: new Date().toISOString(),
-            },
-            { onConflict: 'email' }
-          );
-        } catch (dbErr) {
-          console.warn('Notice: Error upserting profile in database on login:', dbErr.message);
-        }
-      }
     }
 
-    // Fallback if running in offline development mode
-    if (!authUser) {
-      authUser = {
-        id: uuidv4(),
-        email: cleanEmail,
-      };
+    const userRow = result.rows[0];
+
+    // 2. Verify password with bcrypt
+    const isPasswordValid = await bcrypt.compare(password, userRow.password_hash);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password.',
+      });
     }
+
+    // 3. Construct user payload strictly from database record and generate JWT token
+    const dbRole = (userRow.role || 'issuer').toLowerCase();
+    const formattedRole = dbRole === 'admin' ? 'Admin' : 'Issuer';
 
     const userPayload = {
-      id: authUser.id,
-      email: cleanEmail,
-      name: authUser.user_metadata?.full_name || displayName,
-      role: resolvedRole,
+      id: userRow.id,
+      email: userRow.email,
+      name: userRow.full_name,
+      role: formattedRole,
+      institution: userRow.institution || null,
     };
 
-    const token = sessionToken || generateToken(userPayload, '7d');
+    const token = generateToken(userPayload, '7d');
 
     return res.status(200).json({
       success: true,
-      message: 'Login successful via Supabase Auth',
+      message: 'Login successful',
       token,
       user: userPayload,
     });
@@ -256,19 +358,15 @@ router.post('/login', async (req, res) => {
 /**
  * POST /api/auth/logout
  * 
- * Supabase Auth Logout (supabase.auth.signOut).
+ * Stateless JWT logout endpoint.
  */
 router.post('/logout', async (req, res) => {
   try {
-    if (supabase.isConfigured) {
-      await supabase.auth.signOut();
-    }
     return res.status(200).json({
       success: true,
-      message: 'Supabase session logged out successfully',
+      message: 'Logged out successfully',
     });
   } catch (err) {
-    console.warn('Logout notice:', err.message);
     return res.status(200).json({
       success: true,
       message: 'Logged out successfully',
@@ -279,7 +377,7 @@ router.post('/logout', async (req, res) => {
 /**
  * GET /api/auth/me
  * 
- * Returns currently authenticated user session.
+ * Returns currently authenticated user session from JWT.
  */
 router.get('/me', requireAuth, (req, res) => {
   return res.status(200).json({

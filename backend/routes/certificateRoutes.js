@@ -5,13 +5,13 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const supabase = require('../config/supabase');
+const pool = require('../config/database');
 const certificateController = require('../controllers/certificateController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// 1. Configure multer memory storage (buffers file in memory for direct Supabase upload)
+// 1. Configure multer memory storage (buffers file in memory for direct processing)
 const storage = multer.memoryStorage();
 
 // 2. File filter to only allow PDF, PNG, JPG, JPEG
@@ -47,7 +47,7 @@ const upload = multer({
  * 4. GET /api/certificates
  * 
  * Purpose:
- * Fetch all certificates from Supabase 'certificates' table.
+ * Fetch all certificates from PostgreSQL 'certificates' table.
  * 
  * Return fields:
  * - certificate_name
@@ -56,21 +56,21 @@ const upload = multer({
  * - file_url
  * - created_at / createdDate
  */
-router.get(['/', '/api/certificates'], async (req, res) => {
+router.get(['/', '/api/certificates'], requireAuth, async (req, res) => {
   try {
     let certificates = [];
+    const isAdmin = (req.user?.role || '').toLowerCase() === 'admin';
 
-    if (supabase.isConfigured) {
-      const { data, error } = await supabase
-        .from('certificates')
-        .select('id, certificate_name, issuer, status, file_url, verification_score, created_at')
-        .order('created_at', { ascending: false });
+    try {
+      const query = isAdmin
+        ? 'SELECT * FROM certificates ORDER BY created_at DESC'
+        : 'SELECT * FROM certificates WHERE student_id = $1 ORDER BY created_at DESC';
+      const params = isAdmin ? [] : [req.user.id];
 
-      if (!error && Array.isArray(data)) {
-        certificates = data;
-      } else if (error) {
-        console.warn('Notice: Error querying certificates table from Supabase:', error.message);
-      }
+      const result = await pool.query(query, params);
+      certificates = result.rows || [];
+    } catch (dbErr) {
+      console.warn('Notice: Error querying certificates table from PostgreSQL:', dbErr.message);
     }
 
     // Map and normalize fields: certificate name, issuer, status, file url, created date
@@ -91,15 +91,16 @@ router.get(['/', '/api/certificates'], async (req, res) => {
             day: 'numeric',
             year: 'numeric',
           })
-        : 'Recent',
+        : null,
       issueDate: item.created_at
         ? new Date(item.created_at).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric',
           })
-        : 'Recent',
+        : null,
       verification_score: item.verification_score || 0,
+      student_id: item.student_id,
     }));
 
     return res.status(200).json(formattedCertificates);
@@ -113,53 +114,23 @@ router.get(['/', '/api/certificates'], async (req, res) => {
 
 // 5. GET /api/certificates/upload
 // Helpful response when opened directly in a web browser via GET
-router.get('/upload', (req, res) => {
-  res.status(200).json({
-    message: "Certificate upload endpoint is ready. Send an HTTP POST request with your file to upload.",
+router.get(['/upload', '/api/certificates/upload'], (req, res) => {
+  return res.status(200).json({
+    message: "Certificate upload endpoint is active. Send an HTTP POST (multipart/form-data) request with certificate file.",
     method: "POST",
     endpoint: "/api/certificates/upload",
-    acceptedFormats: ["PDF", "PNG", "JPG", "JPEG"]
+    expectedFormData: {
+      file: "PDF, PNG, JPG file binary",
+      certificate_name: "Course / Micro-Credential Name",
+      issuer: "Issuing Institution or Organization",
+    },
+    frontendUploadPage: "http://localhost:3000/upload"
   });
 });
 
-const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('../middleware/authMiddleware');
-
-/**
- * Optional authentication helper:
- * Attaches user session if valid token provided, otherwise continues gracefully.
- */
-function optionalAuth(req, res, next) {
-  const authHeader = req.headers.authorization || req.headers.Authorization;
-  if (!authHeader) return next();
-
-  try {
-    const parts = authHeader.split(' ');
-    if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
-      const token = parts[1];
-      try {
-        req.user = jwt.verify(token, JWT_SECRET);
-      } catch {
-        const decoded = jwt.decode(token);
-        if (decoded) {
-          req.user = {
-            id: decoded.sub || decoded.id,
-            email: decoded.email,
-            name: decoded.user_metadata?.full_name || decoded.name || 'User',
-            role: decoded.user_metadata?.role || decoded.role || 'student',
-          };
-        }
-      }
-    }
-  } catch (e) {
-    // Ignore errors for optional authentication
-  }
-  next();
-}
-
 // 5. POST /api/certificates/upload
-// Production upload: Uploads file to Supabase Storage and records certificate in database
-router.post('/upload', optionalAuth, (req, res) => {
+// Production upload: Uploads file locally and records certificate in database strictly for req.user.id
+router.post(['/upload', '/api/certificates/upload'], requireAuth, (req, res) => {
   upload.any()(req, res, (err) => {
     // Handle multer validation errors
     if (err) {
