@@ -3,6 +3,57 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
+/**
+ * Extracts and normalizes the authoritative role directly from the signed JWT payload.
+ * Prevents localStorage role spoofing and normalizes strictly to 'Admin' or 'Issuer'.
+ */
+function extractTrustedRole(tokenStr, fallbackRole = 'Issuer') {
+  if (tokenStr && typeof tokenStr === 'string' && tokenStr.includes('.')) {
+    try {
+      const parts = tokenStr.split('.');
+      if (parts.length === 3) {
+        const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = JSON.parse(atob(payloadBase64));
+        if (decoded && decoded.role) {
+          const raw = String(decoded.role).trim().toLowerCase();
+          return raw === 'admin' ? 'Admin' : 'Issuer';
+        }
+      }
+    } catch {
+      // Ignore parse failure; fallback below
+    }
+  }
+  const rawFallback = (fallbackRole || '').trim().toLowerCase();
+  return rawFallback === 'admin' ? 'Admin' : 'Issuer';
+}
+
+// Ensure Axios immediately carries Authorization Bearer token from localStorage for all requests
+if (typeof window !== 'undefined') {
+  try {
+    const initialToken = localStorage.getItem('token');
+    if (initialToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+    }
+  } catch {}
+}
+
+// Request interceptor registered immediately at module level to guarantee headers on initial mount
+axios.interceptors.request.use(
+  (config) => {
+    try {
+      const currentToken = localStorage.getItem('token');
+      if (currentToken) {
+        config.headers = config.headers || {};
+        if (!config.headers['Authorization'] && !config.headers['authorization']) {
+          config.headers['Authorization'] = `Bearer ${currentToken}`;
+        }
+      }
+    } catch {}
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => {
     try {
@@ -15,13 +66,22 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem('currentUser');
-      return stored ? JSON.parse(stored) : null;
+      const storedToken = localStorage.getItem('token');
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object') return null;
+
+      // Always derive the authoritative role from the signed JWT payload
+      parsed.role = extractTrustedRole(storedToken, parsed.role);
+      return parsed;
     } catch {
       return null;
     }
   });
 
-  // Keep Axios Authorization header synced with active token
+  const isAuthReady = true;
+
+  // Keep Axios Authorization header synced with active token state
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -30,32 +90,19 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
-  // Set up request interceptor as a failsafe to always read active token
-  useEffect(() => {
-    const interceptorId = axios.interceptors.request.use(
-      (config) => {
-        const currentToken = localStorage.getItem('token');
-        if (currentToken) {
-          config.headers = config.headers || {};
-          config.headers['Authorization'] = `Bearer ${currentToken}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
-
-    return () => {
-      axios.interceptors.request.eject(interceptorId);
-    };
-  }, []);
-
   // Listen for storage changes across tabs or windows
   useEffect(() => {
     const handleStorageChange = () => {
       try {
         const storedUser = localStorage.getItem('currentUser');
         const storedToken = localStorage.getItem('token');
-        setUser(storedUser ? JSON.parse(storedUser) : null);
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          parsed.role = extractTrustedRole(storedToken, parsed.role);
+          setUser(parsed);
+        } else {
+          setUser(null);
+        }
         setToken(storedToken || null);
       } catch {
         setUser(null);
@@ -68,18 +115,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = (userData, authToken = null) => {
-    const rawRole = (userData.role || '').trim().toLowerCase();
-    const resolvedRole = rawRole === 'admin' ? 'Admin' : 'Issuer';
+    const resolvedToken = authToken || userData.token || null;
+    const authoritativeRole = extractTrustedRole(resolvedToken, userData.role);
 
     const normalizedUser = {
       ...userData,
       name: userData.name || userData.fullName || userData.email?.split('@')[0] || 'User',
-      role: resolvedRole,
+      role: authoritativeRole,
       isLoggedIn: true,
       loginTime: new Date().toISOString(),
     };
-
-    const resolvedToken = authToken || userData.token || null;
 
     localStorage.setItem('currentUser', JSON.stringify(normalizedUser));
     if (resolvedToken) {
@@ -94,7 +139,10 @@ export const AuthProvider = ({ children }) => {
   const updateUser = (updatedFields) => {
     setUser((prev) => {
       if (!prev) return null;
-      const merged = { ...prev, ...updatedFields };
+      // Do not allow client updates to overwrite the authoritative role
+      const sanitizedUpdates = { ...updatedFields };
+      delete sanitizedUpdates.role;
+      const merged = { ...prev, ...sanitizedUpdates };
       try {
         localStorage.setItem('currentUser', JSON.stringify(merged));
       } catch (e) {
@@ -124,6 +172,7 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         isAuthenticated: Boolean(user),
+        isAuthReady,
         login,
         logout,
         updateUser,

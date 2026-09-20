@@ -72,35 +72,19 @@ function Login() {
           navigate(fromPath && !fromPath.includes('login') ? fromPath : defaultPath);
         }, 500);
       } else {
-        throw new Error(res.data?.error || 'Authentication failed');
+        throw new Error(res.data?.message || res.data?.error || 'Authentication failed');
       }
     } catch (err) {
       console.warn('Backend login status:', err);
-      const serverErr = err.response?.data?.error;
+      const serverErr =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        (err.response?.status === 403
+          ? 'Selected role does not match the role assigned to this account.'
+          : err.message || 'Unable to connect to authentication server. Please ensure the backend is running.');
 
-      if (serverErr) {
-        setErrorMessage(serverErr);
-        setIsLoading(false);
-        return;
-      }
-
-      // Fallback session if backend server is not running
-      const fallbackUser = {
-        email: email.trim(),
-        name: email.split('@')[0],
-        role: role,
-      };
-      login(fallbackUser, `local-token-${Date.now()}`);
-      setIsSuccess(true);
-
-      const targetRole = role.toLowerCase();
-      setTimeout(() => {
-        if (targetRole === 'admin') {
-          navigate('/admin');
-        } else {
-          navigate('/dashboard');
-        }
-      }, 500);
+      setErrorMessage(serverErr);
+      setIsLoading(false);
     }
   };
 

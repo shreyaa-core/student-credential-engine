@@ -48,8 +48,8 @@ function Admin() {
   const handleApprove = async (id, name) => {
     try {
       setActionLoadingId(id);
-      await updateCertificateStatus(id, 'APPROVED', 'Approved by administrator');
-      showNotice(`Certificate "${name || id}" has been APPROVED.`, 'success');
+      await updateCertificateStatus(id, 'VERIFIED', 'Approved and verified by administrator');
+      showNotice(`Certificate "${name || id}" has been VERIFIED.`, 'success');
       // Refresh table after status update
       await fetchCertificates();
     } catch (err) {

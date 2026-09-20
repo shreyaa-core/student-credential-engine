@@ -162,7 +162,6 @@ function Transcript() {
                       <th className="py-3 px-4">Certificate Name</th>
                       <th className="py-3 px-4">Issuer</th>
                       <th className="py-3 px-4">Issue Date</th>
-                      <th className="py-3 px-4">Verification Score</th>
                       <th className="py-3 px-4">Status</th>
                     </tr>
                   </thead>
@@ -175,9 +174,6 @@ function Transcript() {
                         </td>
                         <td className="py-3.5 px-4 font-medium text-slate-700">{cert.issuer || 'Unknown'}</td>
                         <td className="py-3.5 px-4 text-slate-600 text-xs">{cert.issueDate || 'Recorded'}</td>
-                        <td className="py-3.5 px-4 text-xs font-semibold text-slate-800">
-                          {cert.verificationScore > 0 ? `${cert.verificationScore} / 100` : 'Pending'}
-                        </td>
                         <td className="py-3.5 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                             ['APPROVED', 'VERIFIED'].includes((cert.status || '').toUpperCase())

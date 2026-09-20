@@ -21,6 +21,7 @@ function Navbar() {
         { label: 'Certificates', path: '/certificates' },
         { label: 'Skills', path: '/skills' },
         { label: 'Badges', path: '/badges' },
+        { label: 'Verify Credential', path: '/verify' },
       ]
     : [
         { label: 'Home', path: '/' },
@@ -30,6 +31,16 @@ function Navbar() {
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const handleVerifyCredentialClick = (e) => {
+    if (e) e.preventDefault();
+    if (isOpen) setIsOpen(false);
+    if (isAuthenticated) {
+      navigate('/verify');
+    } else {
+      navigate('/login', { state: { from: { pathname: '/verify' } } });
+    }
   };
 
   const userInitial = (user?.name || user?.email || 'U').charAt(0).toUpperCase();
@@ -50,15 +61,30 @@ function Navbar() {
 
           {/* Desktop Navigation Links */}
           <div className="hidden md:flex items-center space-x-1">
-            {links.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className="px-3.5 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
-              >
-                {link.label}
-              </Link>
-            ))}
+            {links.map((link) => {
+              if (link.label === 'Verify Credential') {
+                return (
+                  <Link
+                    key={link.label}
+                    to={isAuthenticated ? '/verify' : '/login'}
+                    state={isAuthenticated ? undefined : { from: { pathname: '/verify' } }}
+                    onClick={handleVerifyCredentialClick}
+                    className="px-3.5 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    {link.label}
+                  </Link>
+                );
+              }
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className="px-3.5 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
 
             {/* Authenticated User Status vs Login / Register Buttons */}
             {isAuthenticated && user ? (
@@ -131,16 +157,31 @@ function Navbar() {
       {/* Mobile Menu Dropdown */}
       {isOpen && (
         <div className="md:hidden border-t border-slate-200 bg-white px-4 pt-2 pb-4 space-y-1">
-          {links.map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              onClick={() => setIsOpen(false)}
-              className="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {links.map((link) => {
+            if (link.label === 'Verify Credential') {
+              return (
+                <Link
+                  key={link.label}
+                  to={isAuthenticated ? '/verify' : '/login'}
+                  state={isAuthenticated ? undefined : { from: { pathname: '/verify' } }}
+                  onClick={handleVerifyCredentialClick}
+                  className="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors cursor-pointer"
+                >
+                  {link.label}
+                </Link>
+              );
+            }
+            return (
+              <Link
+                key={link.path}
+                to={link.path}
+                onClick={() => setIsOpen(false)}
+                className="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+              >
+                {link.label}
+              </Link>
+            );
+          })}
 
           {/* Mobile Auth Section */}
           <div className="pt-3 mt-2 border-t border-slate-100">

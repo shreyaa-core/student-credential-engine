@@ -77,20 +77,19 @@ router.get(['/', '/api/dashboard'], requireAuth, async (req, res) => {
 
       // 3. Fetch badges earned strictly by this user
       const badgesResult = await pool.query(
-        `SELECT id, name, criteria, image_url, created_at 
+        `SELECT id, student_id, certificate_id, name, criteria, image_url, created_at 
          FROM badges 
          WHERE student_id = $1 
          ORDER BY created_at DESC;`,
         [studentId]
       );
-      const badgeList = badgesResult.rows || [];
-
-      badgesEarned = badgeList.length;
-      latestBadges = badgeList.slice(0, 4).map((b) => ({
+      const explicitBadges = (badgesResult.rows || []).map((b) => ({
         id: b.id,
+        certificate_id: b.certificate_id,
         name: b.name || 'Micro-Credential Badge',
         criteria: b.criteria || null,
         imageUrl: b.image_url || '',
+        icon: b.image_url || '🏅',
         earnedDate: b.created_at
           ? new Date(b.created_at).toLocaleDateString('en-US', {
               month: 'short',
@@ -98,6 +97,59 @@ router.get(['/', '/api/dashboard'], requireAuth, async (req, res) => {
             })
           : null,
       }));
+
+      // Synchronize digital badges dynamically for any verified certificates
+      const existingCertBadgeIds = new Set(explicitBadges.map((b) => b.certificate_id).filter(Boolean));
+      const verifiedCerts = certs.filter((c) =>
+        ['APPROVED', 'VERIFIED', 'Verified', 'Approved', 'valid'].includes(c.status)
+      );
+
+      if (verifiedCerts.length > 0) {
+        const certIds = verifiedCerts.map((c) => c.id);
+        const certSkillsRes = await pool.query(
+          `SELECT cs.certificate_id, s.name AS skill_name
+           FROM certificate_skills cs
+           JOIN skills s ON cs.skill_id = s.id
+           WHERE cs.certificate_id = ANY($1::uuid[])`,
+          [certIds]
+        );
+        const skillsByCert = {};
+        for (const row of certSkillsRes.rows || []) {
+          if (!skillsByCert[row.certificate_id]) {
+            skillsByCert[row.certificate_id] = [];
+          }
+          skillsByCert[row.certificate_id].push(row.skill_name);
+        }
+
+        for (const cert of verifiedCerts) {
+          if (!existingCertBadgeIds.has(cert.id)) {
+            const skillNames = skillsByCert[cert.id] || [];
+            const criteriaText = skillNames.length > 0
+              ? `Demonstrated competency in ${skillNames.join(', ')}`
+              : 'Verified Credential Achievement';
+
+            explicitBadges.push({
+              id: `badge-${cert.id}`,
+              certificate_id: cert.id,
+              name: `${cert.certificate_name} Badge`,
+              issuer: cert.issuer || 'Credential Authority',
+              criteria: criteriaText,
+              imageUrl: '',
+              icon: '🏅',
+              earnedDate: cert.created_at
+                ? new Date(cert.created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })
+                : 'Recent',
+            });
+          }
+        }
+      }
+
+      badgesEarned = explicitBadges.length;
+      latestBadges = explicitBadges.slice(0, 4);
     } catch (dbQueryErr) {
       console.warn('Notice: Error executing PostgreSQL query for user dashboard metrics:', dbQueryErr.message);
     }

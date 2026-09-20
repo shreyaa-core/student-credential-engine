@@ -76,6 +76,8 @@ router.get(['/', '/api/certificates'], requireAuth, async (req, res) => {
     // Map and normalize fields: certificate name, issuer, status, file url, created date
     const formattedCertificates = certificates.map((item) => ({
       id: item.id,
+      certificate_id: item.certificate_id || null,
+      certificateId: item.certificate_id || null,
       certificate_name: item.certificate_name,
       certificateName: item.certificate_name,
       title: item.certificate_name,

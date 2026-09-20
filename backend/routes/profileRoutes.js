@@ -104,6 +104,41 @@ async function fetchUserProfileData(userId) {
       : null,
   }));
 
+  // Synchronize and include digital badges dynamically for any verified / approved certificates
+  const existingBadgeCertIds = new Set(badges.map((b) => b.certificate_id).filter(Boolean));
+  for (const cert of certificates) {
+    const isVerified = ['VERIFIED', 'APPROVED'].includes((cert.status || '').toUpperCase());
+    if (isVerified && !existingBadgeCertIds.has(cert.id)) {
+      const certSkills = skills
+        .filter((s) => s.verifiedBy > 0)
+        .map((s) => s.name);
+      const criteriaText = certSkills.length > 0
+        ? `Demonstrated competency in ${certSkills.join(', ')}`
+        : 'Verified Credential Achievement';
+
+      badges.push({
+        id: `badge-${cert.id}`,
+        student_id: userId,
+        certificate_id: cert.id,
+        name: `${cert.title || cert.certificate_name} Badge`,
+        issuer: cert.issuer || 'Credential Authority',
+        criteria: criteriaText,
+        image_url: '',
+        icon: '🏅',
+        earnedDate: cert.issueDate || 'Recent',
+      });
+    }
+  }
+
+  const totalCertificates = certificates.length;
+  const verifiedCertificates = certificates.filter((c) =>
+    ['VERIFIED', 'APPROVED'].includes((c.status || '').toUpperCase())
+  ).length;
+  const rawTrustRating = totalCertificates === 0 ? 0 : (verifiedCertificates / totalCertificates) * 100;
+  const trustScoreFormatted = totalCertificates === 0
+    ? '0%'
+    : (rawTrustRating % 1 === 0 ? `${rawTrustRating}%` : `${rawTrustRating.toFixed(2)}%`);
+
   const formattedProfile = {
     id: profile.id,
     name: profile.full_name,
@@ -118,10 +153,12 @@ async function fetchUserProfileData(userId) {
     issuerId: `ISS-${profile.id.substring(0, 8).toUpperCase()}`,
     created_at: profile.created_at,
     stats: {
-      certificatesCount: certificates.length,
+      certificatesCount: totalCertificates,
+      verifiedCertificatesCount: verifiedCertificates,
       skillsCount: skills.length,
       badgesCount: badges.length,
-      trustScore: certificates.length > 0 ? '100%' : 'N/A',
+      trustScore: trustScoreFormatted,
+      trustRating: trustScoreFormatted,
     },
   };
 

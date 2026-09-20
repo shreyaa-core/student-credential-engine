@@ -262,7 +262,8 @@ async function handleVerificationLookup(identifier, req, res) {
     }
 
     // Log real audit event into PostgreSQL verification_logs table
-    const verificationStatus = cert.status === 'VERIFIED' ? 'SUCCESS' : 'PENDING_REVIEW';
+    const isCertVerified = cert.status === 'VERIFIED' || cert.status === 'APPROVED';
+    const verificationStatus = isCertVerified ? 'SUCCESS' : 'PENDING_REVIEW';
     const auditEventId = uuidv4();
     const eventTimestamp = new Date().toISOString();
 
@@ -290,7 +291,7 @@ async function handleVerificationLookup(identifier, req, res) {
     // Map human-readable status
     const statusUpper = (cert.status || 'PENDING').toUpperCase();
     let displayStatus = 'Pending Review';
-    if (statusUpper === 'VERIFIED') {
+    if (statusUpper === 'VERIFIED' || statusUpper === 'APPROVED') {
       displayStatus = 'Credential Verified';
     } else if (statusUpper === 'MANUAL_REVIEW') {
       displayStatus = 'Manual Review Required';

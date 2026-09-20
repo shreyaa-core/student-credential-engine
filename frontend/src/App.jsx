@@ -20,6 +20,7 @@ import UploadCertificate from './pages/UploadCertificate';
 import Certificates from './pages/Certificates';
 import Skills from './pages/Skills';
 import Badges from './pages/Badges';
+import BadgeDetails from './pages/BadgeDetails';
 import Portfolio from './pages/Portfolio';
 import Profile from './pages/Profile';
 import Transcript from './pages/Transcript';
@@ -129,6 +130,16 @@ function App() {
             <ProtectedRoute>
               <DashboardLayout>
                 <Badges />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/badges/:badgeId"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <BadgeDetails />
               </DashboardLayout>
             </ProtectedRoute>
           }

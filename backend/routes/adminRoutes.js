@@ -139,15 +139,31 @@ router.put(['/certificates/:id/status', '/:id/status'], adminAuth, async (req, r
       });
     }
 
+    // Normalize status to canonical verified state:
+    // When an Admin approves a certificate, it transitions to canonical 'VERIFIED' with score 100.
+    let canonicalStatus = status.trim().toUpperCase();
+    let score = 50;
+
+    if (canonicalStatus === 'APPROVED' || canonicalStatus === 'VERIFIED') {
+      canonicalStatus = 'VERIFIED';
+      score = 100;
+    } else if (canonicalStatus === 'REJECTED') {
+      canonicalStatus = 'REJECTED';
+      score = 0;
+    } else {
+      canonicalStatus = 'MANUAL_REVIEW';
+      score = 50;
+    }
+
     // Update certificate in PostgreSQL database
     const updateQuery = `
       UPDATE certificates 
-      SET status = $1, admin_notes = $2
-      WHERE id = $3
+      SET status = $1, admin_notes = $2, verification_score = $3
+      WHERE id = $4
       RETURNING id, certificate_name, issuer, status, verification_score, admin_notes, created_at;
     `;
 
-    const result = await pool.query(updateQuery, [status, admin_notes || null, id]);
+    const result = await pool.query(updateQuery, [canonicalStatus, admin_notes || null, score, id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({

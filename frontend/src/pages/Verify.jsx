@@ -1,65 +1,71 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 
 /**
- * Public Credential Verification Page
+ * Public & Authenticated Credential Verification Page
  * 
- * Dynamic real-world verification engine:
- * - Eliminates hardcoded demo data
- * - Fetches authentic micro-credential details by ID or Hash from backend/Supabase database
- * - Records verification audit events in PostgreSQL verification_logs
- * - Provides live search bar to verify any credential
- * - Shows cryptographic verification hash, score, and verified skills
+ * - Unauthenticated /verify/:identifier: Public verification of known credentials
+ * - Authenticated /verify: Issuer workspace displaying their own live uploaded credentials
+ * - Zero hardcoded credentials or mock datasets
+ * - Enforces server-side user ownership for uploaded credentials
  */
 function Verify() {
   const { id: paramId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-
-  // Search & data states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [credential, setCredential] = useState(null);
-  const [availableCredentials, setAvailableCredentials] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const { user, isAuthenticated, token } = useAuth();
 
   // Determine current lookup target (URL param or searchParam)
   const activeIdentifier = paramId || searchParams.get('id') || searchParams.get('query');
 
-  // 1. Fetch available registered credentials & initial verification
-  const loadInitialData = async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
+  // Search & data states for active verification lookup
+  const [searchQuery, setSearchQuery] = useState('');
+  const [credential, setCredential] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  // Authenticated Issuer's uploaded credentials
+  const [userCertificates, setUserCertificates] = useState([]);
+  const [isLoadingUserCerts, setIsLoadingUserCerts] = useState(false);
+  const [userCertsError, setUserCertsError] = useState(null);
+
+  // 1. Guard /verify for unauthenticated users (unless verifying a public identifier)
+  useEffect(() => {
+    if (!activeIdentifier && !isAuthenticated) {
+      navigate('/login', { state: { from: { pathname: '/verify' } }, replace: true });
+    }
+  }, [activeIdentifier, isAuthenticated, navigate]);
+
+  // 2. Fetch authenticated Issuer's own certificates (enforced server-side via GET /api/certificates)
+  const fetchUserCertificates = async () => {
+    if (!isAuthenticated) return;
+    setIsLoadingUserCerts(true);
+    setUserCertsError(null);
 
     try {
-      // First get list of available verifiable credentials
-      const listRes = await axios.get('http://localhost:5000/api/verify');
-      const list = listRes.data?.credentials || [];
-      setAvailableCredentials(list);
-
-      // If active identifier provided in URL, verify that specific credential
-      if (activeIdentifier) {
-        await executeVerification(activeIdentifier);
-      } else if (list.length > 0) {
-        // Automatically verify the latest real credential from the system
-        await executeVerification(list[0].id);
-      } else {
-        setIsLoading(false);
-      }
+      const authToken = token || localStorage.getItem('token');
+      const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+      const response = await axios.get('http://localhost:5000/api/certificates', { headers });
+      const list = Array.isArray(response.data) ? response.data : (response.data?.certificates || []);
+      setUserCertificates(list);
     } catch (err) {
-      console.warn('Notice loading verify portal:', err.message);
-      // If server is not responding, fallback to local lookup
-      if (activeIdentifier) {
-        await executeVerification(activeIdentifier);
-      } else {
-        setIsLoading(false);
-      }
+      console.error('Error loading issuer certificates:', err);
+      setUserCertsError('Unable to load your certificates. Please try again.');
+    } finally {
+      setIsLoadingUserCerts(false);
     }
   };
 
-  // 2. Execute verification lookup against backend
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUserCertificates();
+    }
+  }, [isAuthenticated]);
+
+  // 3. Execute verification lookup against backend for active identifier
   const executeVerification = async (targetId) => {
     if (!targetId || !targetId.trim()) return;
 
@@ -90,7 +96,13 @@ function Verify() {
   };
 
   useEffect(() => {
-    loadInitialData();
+    if (activeIdentifier) {
+      executeVerification(activeIdentifier);
+    } else {
+      setCredential(null);
+      setErrorMessage(null);
+      setIsLoading(false);
+    }
   }, [activeIdentifier]);
 
   const handleSearchSubmit = (e) => {
@@ -114,9 +126,9 @@ function Verify() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 mb-2">
             <span>🛡️</span> Real-Time Verification Engine
           </div>
-          <h2 className="text-xl font-bold text-slate-900">
-            Verify Academic & Professional Micro-Credentials
-          </h2>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            VERIFY CREDENTIAL
+          </h1>
           <p className="text-xs text-slate-500 mt-1">
             Query the cryptographic registry directly to confirm credential authenticity and competence.
           </p>
@@ -127,7 +139,7 @@ function Verify() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Enter Certificate ID (e.g. CRED-...), Hash (0x...), or Title..."
+            placeholder="Enter Certificate ID, Hash, or Title..."
             className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs font-mono"
           />
           <button
@@ -148,36 +160,10 @@ function Verify() {
             )}
           </button>
         </form>
-
-        {/* Quick Click Available Credentials (Real database records) */}
-        {availableCredentials.length > 0 && (
-          <div className="mt-5 pt-4 border-t border-slate-100 max-w-2xl mx-auto">
-            <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400 block mb-2 text-center">
-              Available Credentials in Registry (Click to Verify Live):
-            </span>
-            <div className="flex flex-wrap justify-center gap-2">
-              {availableCredentials.slice(0, 4).map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => navigate(`/verify/${c.id}`)}
-                  className={`text-xs px-3 py-1.5 rounded-lg border transition-all cursor-pointer text-left ${
-                    credential?.id === c.id
-                      ? 'bg-indigo-50 border-indigo-300 text-indigo-800 font-semibold'
-                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <span className="font-semibold block truncate max-w-[200px]">{c.title || c.certificate_name}</span>
-                  <span className="text-[10px] text-slate-500">{c.credentialId || c.issuer}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Loading Indicator */}
-      {isLoading && (
+      {/* Loading Indicator for Active Verification */}
+      {isLoading && activeIdentifier && (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
           <div className="inline-block animate-spin text-3xl mb-3">⚙️</div>
           <h3 className="text-base font-bold text-slate-800">Authenticating Credential...</h3>
@@ -187,8 +173,8 @@ function Verify() {
         </div>
       )}
 
-      {/* Error Message */}
-      {!isLoading && errorMessage && (
+      {/* Error Message for Active Verification */}
+      {!isLoading && activeIdentifier && errorMessage && (
         <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center shadow-sm">
           <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-2xl mx-auto mb-3 border border-rose-200">
             ⚠️
@@ -213,7 +199,7 @@ function Verify() {
       )}
 
       {/* Verified Credential View */}
-      {!isLoading && !errorMessage && credential && (() => {
+      {!isLoading && activeIdentifier && !errorMessage && credential && (() => {
         const getStatusTheme = (statusCode) => {
           const code = (statusCode || '').toUpperCase();
           switch (code) {
@@ -273,8 +259,19 @@ function Verify() {
         const statusTheme = getStatusTheme(credential.statusCode);
 
         return (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-            {/* CARD 1: Certificate Verification Banner */}
+          <div className="space-y-4 mb-8">
+            {isAuthenticated && (
+              <div>
+                <Link
+                  to="/verify"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                >
+                  <span>←</span> Back to Your Uploaded Credentials
+                </Link>
+              </div>
+            )}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+              {/* CARD 1: Certificate Verification Banner */}
             <div className={`p-6 sm:p-8 text-white ${statusTheme.bannerBg}`}>
               <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
                 <div className="flex items-center gap-4 text-center sm:text-left">
@@ -292,18 +289,6 @@ function Verify() {
                       {statusTheme.desc}
                     </p>
                   </div>
-                </div>
-
-                <div className="bg-white/15 backdrop-blur-sm px-4 py-3 rounded-xl border border-white/20 text-center shrink-0 min-w-[140px]">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-white/80 block">
-                    Verification Score
-                  </span>
-                  <span className="text-2xl font-black tracking-tight text-white block mt-0.5">
-                    {credential.verificationScore} / 100
-                  </span>
-                  <span className="text-[10px] text-white/70 block mt-0.5">
-                    Completeness metric
-                  </span>
                 </div>
               </div>
 
@@ -586,16 +571,6 @@ function Verify() {
                       ● {credential.status || 'Not specified'}
                     </span>
                   </div>
-
-                  {/* Verification Score */}
-                  <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-100">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
-                      Verification Completeness Score
-                    </span>
-                    <p className="text-sm font-bold text-indigo-600">
-                      {credential.verificationScore !== undefined ? `${credential.verificationScore} / 100` : 'Not specified'}
-                    </p>
-                  </div>
                 </div>
 
                 {/* Cryptographic Hash & Stored File URL */}
@@ -659,9 +634,150 @@ function Verify() {
                 </div>
               </div>
             </div>
+            </div>
           </div>
         );
       })()}
+
+      {/* Authenticated Issuer Section: Your Uploaded Credentials */}
+      {isAuthenticated && (
+        <div className="mt-8 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+                YOUR UPLOADED CREDENTIALS
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Certificates belonging to your account from the live registry
+              </p>
+            </div>
+            {userCertificates.length > 0 && (
+              <Link
+                to="/upload"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer self-start sm:self-auto"
+              >
+                <span>+</span> Upload Another Certificate
+              </Link>
+            )}
+          </div>
+
+          {/* Loading state */}
+          {isLoadingUserCerts && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-sm">
+              <div className="inline-block animate-spin text-2xl mb-2">⚙️</div>
+              <p className="text-sm font-semibold text-slate-700">Loading your certificates...</p>
+              <p className="text-xs text-slate-400 mt-0.5">Connecting to live PostgreSQL database</p>
+            </div>
+          )}
+
+          {/* Error state */}
+          {!isLoadingUserCerts && userCertsError && (
+            <div className="bg-white rounded-2xl border border-rose-200 p-6 text-center shadow-sm">
+              <p className="text-sm font-semibold text-rose-700">{userCertsError}</p>
+              <button
+                type="button"
+                onClick={fetchUserCertificates}
+                className="mt-3 px-4 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-colors cursor-pointer border border-rose-200"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!isLoadingUserCerts && !userCertsError && userCertificates.length === 0 && (
+            <div className="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-8 sm:p-12 text-center shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl mx-auto mb-4 border border-indigo-100">
+                📜
+              </div>
+              <h3 className="text-base font-bold text-slate-800">
+                No certificates uploaded yet.
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1.5 mb-6 max-w-md mx-auto leading-relaxed">
+                Upload a certificate to extract its details, analyze its skills, and verify its authenticity.
+              </p>
+              <Link
+                to="/upload"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors cursor-pointer"
+              >
+                <span>📤</span>
+                <span>Upload Certificate</span>
+              </Link>
+            </div>
+          )}
+
+          {/* Non-empty state: Certificate Cards */}
+          {!isLoadingUserCerts && !userCertsError && userCertificates.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {userCertificates.map((cert) => {
+                const certIdentifier = cert.certificate_id || cert.certificateId || cert.id;
+                const statusUpper = (cert.status || 'PENDING').toUpperCase();
+                const isVerified = statusUpper === 'VERIFIED' || statusUpper === 'APPROVED';
+                const isReview = statusUpper === 'MANUAL_REVIEW' || statusUpper === 'PENDING';
+
+                return (
+                  <div
+                    key={cert.id}
+                    className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          {(cert.certificate_id || cert.certificateId) && (
+                            <span className="text-[10px] font-mono text-slate-400 block truncate">
+                              ID: {cert.certificate_id || cert.certificateId}
+                            </span>
+                          )}
+                          <h3 className="text-base font-bold text-slate-900 truncate mt-0.5" title={cert.certificate_name || cert.title}>
+                            {cert.certificate_name || cert.certificateName || cert.title || 'Untitled Certificate'}
+                          </h3>
+                        </div>
+                        <span
+                          className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase border ${
+                            isVerified
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : isReview
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          ● {cert.status || 'Pending'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl">
+                        <div>
+                          <span className="text-[10px] uppercase font-semibold text-slate-400 block">Issuer</span>
+                          <span className="font-medium text-slate-800 truncate block">{cert.issuer || 'Not specified'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-semibold text-slate-400 block">Issue Date</span>
+                          <span className="font-medium text-slate-800 block">
+                            {cert.issueDate || cert.date || (cert.created_at ? new Date(cert.created_at).toLocaleDateString() : 'Recent')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-400">
+                        Status: <span className="font-semibold text-slate-700">{cert.status || 'Pending'}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/verify/${encodeURIComponent(certIdentifier)}`)}
+                        className="px-3.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        View Verification →
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

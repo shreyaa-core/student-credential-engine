@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
@@ -87,6 +87,45 @@ function Portfolio() {
     return nameStr.substring(0, 2).toUpperCase();
   };
 
+  const certificates = Array.isArray(portfolioData.certificates) ? portfolioData.certificates : [];
+  const skills = Array.isArray(portfolioData.skills) ? portfolioData.skills : [];
+  const badges = Array.isArray(portfolioData.badges) ? portfolioData.badges : [];
+
+  // Dynamic Trust Rating Calculation:
+  // (number of VERIFIED / APPROVED certificates / total number of uploaded certificates) * 100
+  // Authoritative verified statuses ('VERIFIED', 'APPROVED') count as verified.
+  // All other statuses (MANUAL_REVIEW, PENDING, REJECTED, etc.) count as unverified.
+  const totalCertificates = certificates.length;
+  const verifiedCertificates = certificates.filter((c) =>
+    ['VERIFIED', 'APPROVED'].includes((c.status || '').toUpperCase())
+  ).length;
+  const rawTrustRating = totalCertificates === 0 ? 0 : (verifiedCertificates / totalCertificates) * 100;
+  const trustRatingDisplay = totalCertificates === 0
+    ? '0%'
+    : (rawTrustRating % 1 === 0 ? `${rawTrustRating}%` : `${rawTrustRating.toFixed(2)}%`);
+
+  // Derive digital badges dynamically from verified certificates if none in badges table
+  let displayBadges = [...badges];
+  if (displayBadges.length === 0) {
+    const verifiedList = certificates.filter((c) =>
+      ['VERIFIED', 'APPROVED'].includes((c.status || '').toUpperCase())
+    );
+    displayBadges = verifiedList.map((cert) => {
+      const skillNames = skills.map((s) => s.name).filter(Boolean);
+      return {
+        id: `badge-${cert.id}`,
+        name: `${cert.title || cert.certificate_name} Badge`,
+        issuer: cert.issuer || 'Credential Authority',
+        criteria: skillNames.length > 0
+          ? `Demonstrated competency in ${skillNames.join(', ')}`
+          : 'Verified Credential Achievement',
+        image_url: '',
+        icon: '🏅',
+        earnedDate: cert.issueDate || 'Recent',
+      };
+    });
+  }
+
   const profile = portfolioData.profile || {
     name: user?.name || user?.email?.split('@')[0] || 'User',
     full_name: user?.name || user?.email?.split('@')[0] || 'User',
@@ -98,16 +137,14 @@ function Portfolio() {
     profile_photo_url: null,
     studentId: user?.id ? `STU-${user.id.substring(0, 8).toUpperCase()}` : 'STU-VERIFIED',
     stats: {
-      certificatesCount: portfolioData.certificates.length,
-      skillsCount: portfolioData.skills.length,
-      badgesCount: portfolioData.badges.length,
-      trustScore: portfolioData.certificates.length > 0 ? '100%' : 'N/A',
+      certificatesCount: totalCertificates,
+      verifiedCertificatesCount: verifiedCertificates,
+      skillsCount: skills.length,
+      badgesCount: displayBadges.length,
+      trustScore: trustRatingDisplay,
+      trustRating: trustRatingDisplay,
     },
   };
-
-  const certificates = portfolioData.certificates;
-  const skills = portfolioData.skills;
-  const badges = portfolioData.badges;
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 py-4 px-4 sm:px-6">
@@ -230,7 +267,7 @@ function Portfolio() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-slate-100">
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-center">
                   <span className="text-2xl font-bold text-slate-900 block">
-                    {certificates.length}
+                    {totalCertificates}
                   </span>
                   <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
                     Certificates
@@ -246,7 +283,7 @@ function Portfolio() {
                 </div>
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-center">
                   <span className="text-2xl font-bold text-amber-500 block">
-                    {badges.length}
+                    {displayBadges.length}
                   </span>
                   <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
                     Digital Badges
@@ -254,7 +291,7 @@ function Portfolio() {
                 </div>
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-center">
                   <span className="text-2xl font-bold text-emerald-600 block">
-                    {profile.stats?.trustScore || (certificates.length > 0 ? '100%' : 'N/A')}
+                    {trustRatingDisplay}
                   </span>
                   <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
                     Trust Rating
@@ -311,14 +348,6 @@ function Portfolio() {
                       <p className="text-xs font-medium text-slate-600 mb-3">
                         Issued by <span className="font-semibold text-slate-900">{cert.issuer}</span>
                       </p>
-
-                      {cert.verificationScore > 0 && (
-                        <div className="mb-3">
-                          <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                            Verification Score: {cert.verificationScore}%
-                          </span>
-                        </div>
-                      )}
                     </div>
 
                     <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
@@ -414,19 +443,20 @@ function Portfolio() {
                 </p>
               </div>
               <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                {badges.length} Badges Earned
+                {displayBadges.length} Badges Earned
               </span>
             </div>
 
-            {badges.length > 0 ? (
+            {displayBadges.length > 0 ? (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {badges.map((badge) => (
-                  <div
+                {displayBadges.map((badge) => (
+                  <Link
                     key={badge.id}
-                    className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center flex flex-col items-center justify-between hover:shadow-md transition-shadow relative overflow-hidden"
+                    to={`/badges/${badge.id}`}
+                    className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center flex flex-col items-center justify-between hover:shadow-md hover:border-indigo-300 transition-all relative overflow-hidden group cursor-pointer"
                   >
                     <div className="flex flex-col items-center">
-                      <div className="w-18 h-18 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center text-3xl mb-4 shadow-md ring-4 ring-slate-50">
+                      <div className="w-18 h-18 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center text-3xl mb-4 shadow-md ring-4 ring-slate-50 group-hover:scale-105 transition-transform">
                         {badge.image_url?.startsWith('http') || badge.image_url?.startsWith('data:') ? (
                           <img
                             src={badge.image_url}
@@ -437,7 +467,7 @@ function Portfolio() {
                           badge.icon || '🏅'
                         )}
                       </div>
-                      <h4 className="text-base font-bold text-slate-900 mb-1">
+                      <h4 className="text-base font-bold text-slate-900 mb-1 group-hover:text-indigo-600 transition-colors">
                         {badge.name}
                       </h4>
                       <p className="text-xs font-semibold text-indigo-600 mb-2">
@@ -450,9 +480,11 @@ function Portfolio() {
 
                     <div className="w-full pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                       <span>Earned {badge.earnedDate}</span>
-                      <span className="font-mono text-[10px]">{badge.id?.substring(0, 12)}</span>
+                      <span className="text-indigo-600 font-semibold group-hover:translate-x-0.5 transition-transform">
+                        View Badge →
+                      </span>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             ) : (

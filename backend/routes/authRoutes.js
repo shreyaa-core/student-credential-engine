@@ -284,12 +284,13 @@ router.get(['/login', '/api/auth/login'], (req, res) => {
  */
 router.post(['/login', '/api/auth/login'], async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
 
     if (!email || !email.trim()) {
       return res.status(400).json({
         success: false,
         error: 'Email address is required.',
+        message: 'Email address is required.',
       });
     }
 
@@ -297,6 +298,7 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Password is required.',
+        message: 'Password is required.',
       });
     }
 
@@ -312,6 +314,7 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password.',
+        message: 'Invalid email or password.',
       });
     }
 
@@ -323,21 +326,37 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password.',
+        message: 'Invalid email or password.',
       });
     }
 
-    // 3. Construct user payload strictly from database record and generate JWT token
-    const dbRole = (userRow.role || 'issuer').toLowerCase();
-    const formattedRole = dbRole === 'admin' ? 'Admin' : 'Issuer';
+    // 3. Read the authoritative role strictly from the PostgreSQL database record
+    const dbRoleRaw = (userRow.role || 'issuer').trim().toLowerCase();
+    const authoritativeRole = dbRoleRaw === 'admin' ? 'Admin' : 'Issuer';
 
+    // 4. Role mismatch validation:
+    // The role selected on the login page MUST NEVER elevate or change the user's actual role.
+    if (role) {
+      const selectedRole = normalizeRole(role);
+      if (!selectedRole || selectedRole !== authoritativeRole) {
+        return res.status(403).json({
+          success: false,
+          message: 'Selected role does not match the role assigned to this account.',
+          error: 'Selected role does not match the role assigned to this account.',
+        });
+      }
+    }
+
+    // 5. Construct user payload strictly using authoritative database role
     const userPayload = {
       id: userRow.id,
       email: userRow.email,
       name: userRow.full_name,
-      role: formattedRole,
+      role: authoritativeRole,
       institution: userRow.institution || null,
     };
 
+    // 6. Generate cryptographically signed JWT using ONLY the database role
     const token = generateToken(userPayload, '7d');
 
     return res.status(200).json({
@@ -351,6 +370,7 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
     return res.status(500).json({
       success: false,
       error: err.message || 'An unexpected error occurred during login.',
+      message: err.message || 'An unexpected error occurred during login.',
     });
   }
 });

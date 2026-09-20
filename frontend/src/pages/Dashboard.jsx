@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
  * 4. Loading indicator, Error handling with retry, and live Refresh button
  */
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const location = useLocation();
   const accessDenied = location.state?.accessDenied;
 
@@ -39,8 +39,11 @@ function Dashboard() {
     try {
       setIsLoading(true);
       setErrorMessage(null);
+      const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
 
-      const response = await axios.get('http://localhost:5000/api/dashboard');
+      const response = await axios.get('http://localhost:5000/api/dashboard', {
+        headers: activeToken ? { Authorization: `Bearer ${activeToken}` } : {},
+      });
       const data = response.data || {};
 
       setDashboardData({
@@ -66,7 +69,7 @@ function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [token]);
 
   // Summary Metrics configuration
   const summaryMetrics = [
@@ -251,11 +254,6 @@ function Dashboard() {
                     >
                       ● {cert.status}
                     </span>
-                    {cert.verificationScore > 0 && (
-                      <span className="text-[11px] font-bold text-indigo-600">
-                        Score: {cert.verificationScore}%
-                      </span>
-                    )}
                   </div>
                   <h3 className="text-sm font-bold text-slate-800 line-clamp-2 mb-1">
                     {cert.title}
@@ -314,23 +312,27 @@ function Dashboard() {
         {dashboardData.latestBadges.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
             {dashboardData.latestBadges.map((badge) => (
-              <div
+              <Link
                 key={badge.id}
-                className="border border-slate-200 rounded-xl p-4 bg-slate-50/40 hover:shadow-xs text-center flex flex-col items-center justify-between"
+                to={`/badges/${badge.id}`}
+                className="border border-slate-200 rounded-xl p-4 bg-slate-50/40 hover:bg-slate-50 hover:shadow-sm hover:border-indigo-200 transition-all text-center flex flex-col items-center justify-between group cursor-pointer"
               >
-                <div className="w-14 h-14 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-2xl mb-3 shadow-inner">
-                  🏅
+                <div className="w-14 h-14 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-2xl mb-3 shadow-inner group-hover:scale-105 transition-transform">
+                  {badge.icon || '🏅'}
                 </div>
-                <h3 className="text-sm font-bold text-slate-900 mb-1">
+                <h3 className="text-sm font-bold text-slate-900 mb-1 group-hover:text-indigo-600 transition-colors">
                   {badge.name}
                 </h3>
                 <p className="text-xs text-slate-500 line-clamp-2 mb-3 px-1">
                   {badge.criteria}
                 </p>
-                <span className="text-[11px] text-slate-400 font-medium">
-                  Earned: {badge.earnedDate}
-                </span>
-              </div>
+                <div className="w-full pt-2 border-t border-slate-200/50 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Earned: {badge.earnedDate}</span>
+                  <span className="text-indigo-600 font-semibold group-hover:translate-x-0.5 transition-transform">
+                    View Badge →
+                  </span>
+                </div>
+              </Link>
             ))}
           </div>
         ) : (

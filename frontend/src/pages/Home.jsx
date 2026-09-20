@@ -9,18 +9,17 @@ import { useAuth } from '../context/AuthContext';
  * Features clickable highlights navigating to Verify, Skills, and Admin audit consoles.
  */
 function Home() {
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/portfolio', { replace: true });
+  const handleVerifyNavigation = (e) => {
+    if (e) e.preventDefault();
+    if (user) {
+      navigate('/verify');
+    } else {
+      navigate('/login', { state: { from: { pathname: '/verify' } } });
     }
-  }, [isAuthenticated, navigate]);
-
-  if (isAuthenticated) {
-    return null;
-  }
+  };
 
   return (
     <div className="space-y-16 py-8">
@@ -37,10 +36,12 @@ function Home() {
         </p>
         <div className="flex justify-center gap-4 pt-2">
           <Link
-            to="/verify"
-            className="px-6 py-3 rounded-lg bg-indigo-600 text-white font-semibold shadow hover:bg-indigo-700 transition-colors"
+            to={user ? '/verify' : '/login'}
+            state={user ? undefined : { from: { pathname: '/verify' } }}
+            onClick={handleVerifyNavigation}
+            className="px-6 py-3 rounded-lg bg-indigo-600 text-white font-semibold shadow hover:bg-indigo-700 transition-colors cursor-pointer"
           >
-            Verify a Credential
+            Verify credentials
           </Link>
           <Link
             to="/register"
@@ -55,7 +56,9 @@ function Home() {
       <section className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
         {/* 1. Instant Verification */}
         <Link
-          to="/verify"
+          to={user ? '/verify' : '/login'}
+          state={user ? undefined : { from: { pathname: '/verify' } }}
+          onClick={handleVerifyNavigation}
           className="group bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-300 hover:-translate-y-1 transition-all flex flex-col justify-between cursor-pointer"
         >
           <div>

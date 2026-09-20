@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
  *   - Student ID
  *   - File URL (from Supabase Storage)
  *   - File Type
- *   - Status & Verification Score
+ *   - Status
  *   - Verification Checks breakdown
  */
 function UploadCertificate() {
@@ -145,7 +145,7 @@ function UploadCertificate() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 gap-3 text-xs">
               <div>
                 <span className="font-semibold text-slate-500 block">Status:</span>
                 <span className="font-bold text-slate-900">
@@ -153,14 +153,7 @@ function UploadCertificate() {
                 </span>
               </div>
 
-              <div>
-                <span className="font-semibold text-slate-500 block">Verification Score:</span>
-                <span className="font-bold text-indigo-600">
-                  {uploadResult.verification?.score ?? uploadResult.certificate?.verification_score ?? 0} / 100
-                </span>
-              </div>
-
-              <div className="md:col-span-2 pt-1">
+              <div className="pt-1">
                 <span className="font-semibold text-slate-500 block mb-0.5">Reason:</span>
                 <p className="text-slate-800 bg-white p-3 rounded-lg border border-slate-200 font-medium">
                   {uploadResult.verification?.issuerVerification?.reason ||
@@ -316,13 +309,6 @@ function UploadCertificate() {
               <div className="text-xs font-bold uppercase tracking-wider text-slate-500">File Type</div>
               <div className="text-xs font-semibold text-slate-800 mt-1">
                 {uploadResult.certificate?.file_type || 'PDF'}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Verification Score</div>
-              <div className="text-sm font-bold text-indigo-600 mt-0.5">
-                {uploadResult.verification?.score ?? uploadResult.certificate?.verification_score ?? 0} / 100
               </div>
             </div>
 
