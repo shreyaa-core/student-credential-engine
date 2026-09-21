@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Sidebar from './Sidebar';
 
 /**
  * Navbar Component
  * 
  * Clean, reactive navigation bar for the Student Credential Engine.
- * Dynamically reflects logged-in user credentials, role badges, and logout controls.
+ * Supports active top navigation highlighting, dynamic user credentials,
+ * and a slide-out hamburger navigation drawer for authenticated users.
  */
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -49,25 +52,40 @@ function Navbar() {
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Project Name & Brand Logo */}
-          <Link to={isAuthenticated ? '/portfolio' : '/'} className="flex items-center gap-3">
-            <span className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-              🎓
-            </span>
-            <span className="text-xl font-bold text-slate-900 tracking-tight">
-              Student Credential Engine
-            </span>
-          </Link>
+          {/* Left: Hamburger Button (Authenticated) & Brand Logo */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {isAuthenticated && (
+              <button
+                onClick={() => setIsDrawerOpen((prev) => !prev)}
+                type="button"
+                className="p-2 -ml-2 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-slate-100 transition-colors focus:outline-none cursor-pointer flex items-center justify-center"
+                aria-label="Toggle navigation drawer"
+                title="Open navigation menu"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            )}
+            <Link to={isAuthenticated ? '/portfolio' : '/'} className="flex items-center gap-3">
+              <span className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                🎓
+              </span>
+              <span className="text-xl font-bold text-slate-900 tracking-tight">
+                Student Credential Engine
+              </span>
+            </Link>
+          </div>
 
           {/* Desktop Navigation Links */}
           <div className="hidden md:flex items-center space-x-1">
             {links.map((link) => {
-              if (link.label === 'Verify Credential') {
+              if (link.label === 'Verify Credential' && !isAuthenticated) {
                 return (
                   <Link
                     key={link.label}
-                    to={isAuthenticated ? '/verify' : '/login'}
-                    state={isAuthenticated ? undefined : { from: { pathname: '/verify' } }}
+                    to="/login"
+                    state={{ from: { pathname: '/verify' } }}
                     onClick={handleVerifyCredentialClick}
                     className="px-3.5 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition-colors cursor-pointer"
                   >
@@ -76,13 +94,20 @@ function Navbar() {
                 );
               }
               return (
-                <Link
+                <NavLink
                   key={link.path}
                   to={link.path}
-                  className="px-3.5 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                  end={link.path === '/'}
+                  className={({ isActive }) =>
+                    `px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-indigo-50 text-indigo-700 font-semibold shadow-2xs'
+                        : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50'
+                    }`
+                  }
                 >
                   {link.label}
-                </Link>
+                </NavLink>
               );
             })}
 
@@ -158,12 +183,12 @@ function Navbar() {
       {isOpen && (
         <div className="md:hidden border-t border-slate-200 bg-white px-4 pt-2 pb-4 space-y-1">
           {links.map((link) => {
-            if (link.label === 'Verify Credential') {
+            if (link.label === 'Verify Credential' && !isAuthenticated) {
               return (
                 <Link
                   key={link.label}
-                  to={isAuthenticated ? '/verify' : '/login'}
-                  state={isAuthenticated ? undefined : { from: { pathname: '/verify' } }}
+                  to="/login"
+                  state={{ from: { pathname: '/verify' } }}
                   onClick={handleVerifyCredentialClick}
                   className="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors cursor-pointer"
                 >
@@ -172,14 +197,21 @@ function Navbar() {
               );
             }
             return (
-              <Link
+              <NavLink
                 key={link.path}
                 to={link.path}
+                end={link.path === '/'}
                 onClick={() => setIsOpen(false)}
-                className="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+                className={({ isActive }) =>
+                  `block px-3 py-2 rounded-lg text-base font-medium transition-colors ${
+                    isActive
+                      ? 'bg-indigo-50 text-indigo-700 font-semibold'
+                      : 'text-slate-700 hover:bg-slate-50 hover:text-indigo-600'
+                  }`
+                }
               >
                 {link.label}
-              </Link>
+              </NavLink>
             );
           })}
 
@@ -228,6 +260,11 @@ function Navbar() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Slide-out Navigation Drawer for Authenticated Users */}
+      {isAuthenticated && (
+        <Sidebar isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
       )}
     </nav>
   );

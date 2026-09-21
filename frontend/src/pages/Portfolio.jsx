@@ -497,29 +497,6 @@ function Portfolio() {
               </div>
             )}
           </section>
-
-          {/* ========================================================================= */}
-          {/* TRUST / VERIFICATION ATTESTATION FOOTER                                   */}
-          {/* ========================================================================= */}
-          <div className="bg-slate-50 rounded-2xl border border-slate-200 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-            <div className="flex items-center gap-3 text-center sm:text-left">
-              <span className="text-2xl">🛡️</span>
-              <div>
-                <span className="font-semibold text-slate-800 block">
-                  Cryptographically Verified Credential Record
-                </span>
-                <span>
-                  All micro-credentials are authenticated and retrieved live from the Supabase PostgreSQL database.
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/verify')}
-              className="shrink-0 px-4 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 font-semibold text-slate-700 transition-colors cursor-pointer"
-            >
-              Check Public Registry →
-            </button>
-          </div>
         </>
       )}
     </div>

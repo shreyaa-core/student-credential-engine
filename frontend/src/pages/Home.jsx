@@ -25,9 +25,6 @@ function Home() {
     <div className="space-y-16 py-8">
       {/* Hero Section */}
       <section className="text-center max-w-3xl mx-auto space-y-6">
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-          🚀 Next-Gen Credential Engine
-        </span>
         <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight">
           Verify Micro-Credentials with Cryptographic Trust
         </h1>
