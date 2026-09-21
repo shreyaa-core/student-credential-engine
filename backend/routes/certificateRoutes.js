@@ -130,7 +130,22 @@ router.get(['/upload', '/api/certificates/upload'], (req, res) => {
   });
 });
 
-// 5. POST /api/certificates/upload
+// 5. POST /api/certificates/parse
+// Standalone parsing route: Extracts metadata automatically without saving to database
+router.post(['/parse', '/api/certificates/parse'], requireAuth, (req, res) => {
+  upload.any()(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+      });
+    }
+
+    return certificateController.parseCertificateOnly(req, res);
+  });
+});
+
+// 6. POST /api/certificates/upload
 // Production upload: Uploads file locally and records certificate in database strictly for req.user.id
 router.post(['/upload', '/api/certificates/upload'], requireAuth, (req, res) => {
   upload.any()(req, res, (err) => {
@@ -147,4 +162,5 @@ router.post(['/upload', '/api/certificates/upload'], requireAuth, (req, res) => 
 });
 
 module.exports = router;
+
 

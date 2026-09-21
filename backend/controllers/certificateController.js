@@ -90,17 +90,17 @@ async function uploadCertificate(req, res) {
       }
 
       // Calculate SHA-256 hash and check for duplicates in PostgreSQL BEFORE parsing/OCR
+      // Rule: User-scoped duplicate prevention (same user + same file hash => REJECT 409)
+      // Different users uploading the same certificate file are explicitly ALLOWED.
       if (fileBuffer) {
         fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
 
         const dupCheck = await pool.query(
-          'SELECT id, student_id, certificate_name FROM certificates WHERE file_hash = $1 LIMIT 1',
-          [fileHash]
+          'SELECT id FROM certificates WHERE student_id = $1 AND file_hash = $2 LIMIT 1',
+          [student_id, fileHash]
         );
 
         if (dupCheck.rows.length > 0) {
-          const existingCert = dupCheck.rows[0];
-
           // Clean up temp file immediately
           if (tempFilePath && fs.existsSync(tempFilePath)) {
             try {
@@ -109,19 +109,11 @@ async function uploadCertificate(req, res) {
             tempFilePath = null;
           }
 
-          if (existingCert.student_id === student_id) {
-            return res.status(409).json({
-              success: false,
-              code: 'DUPLICATE_CERTIFICATE',
-              message: 'This certificate file has already been uploaded.',
-            });
-          } else {
-            return res.status(409).json({
-              success: false,
-              code: 'DUPLICATE_CERTIFICATE',
-              message: 'This certificate file has already been registered and cannot be uploaded again.',
-            });
-          }
+          return res.status(409).json({
+            success: false,
+            code: 'DUPLICATE_CERTIFICATE',
+            message: 'This certificate has already been uploaded to your account.',
+          });
         }
       }
 
@@ -159,7 +151,7 @@ async function uploadCertificate(req, res) {
 
     // Ensure safe date string for PostgreSQL DATE type
     let safeIssueDate = null;
-    const rawDate = extractedInfo.issueDate || req.body.issueDate || req.body.issue_date;
+    const rawDate = req.body.issue_date || req.body.issueDate || extractedInfo.issueDate;
     if (rawDate) {
       const parsedDate = new Date(rawDate);
       if (!isNaN(parsedDate.getTime())) {
@@ -174,9 +166,9 @@ async function uploadCertificate(req, res) {
       studentName,
       courseName: certificateName,
       issuer,
-      certificateId: extractedInfo.certificateId || req.body.certificateId || req.body.certificate_id || '',
+      certificateId: (req.body.certificate_id || req.body.certificateId || extractedInfo.certificateId || '').trim(),
       issueDate: safeIssueDate,
-      verificationUrl: textUrl || req.body.verificationUrl || req.body.verification_url || '',
+      verificationUrl: (req.body.verification_url || req.body.verificationUrl || textUrl || '').trim(),
       isDuplicate: false,
     };
 
@@ -190,6 +182,8 @@ async function uploadCertificate(req, res) {
         issuer: certificateData.issuer,
         verificationUrl: certificateData.verificationUrl,
         certificateId: certificateData.certificateId,
+        certificateName: certificateData.courseName,
+        studentName: certificateData.studentName,
       });
     } catch (issuerErr) {
       console.warn('Notice: Non-fatal issuer verification exception:', issuerErr.message);
@@ -206,22 +200,26 @@ async function uploadCertificate(req, res) {
     }
 
     // 6. Map verification status and score according to strict authenticity rules:
-    // - ONLY authoritative confirmation by issuer may produce VERIFIED (score = 100)
+    // - ONLY authoritative confirmation by issuer produces VERIFIED (score = 100)
+    // - Suspicious/spoofed/revoked credentials produce SUSPICIOUS (score = 15)
+    // - Request timeouts produce VERIFICATION_TIMEOUT (neutral score capped at 50)
     // - Explicit issuer rejection produces REJECTED (score = 0)
-    // - All others (UNSUPPORTED_ISSUER, VERIFICATION_UNCONFIRMED, TIMEOUT, NOT_REACHABLE, INVALID_URL, UNTRUSTED_ISSUER)
-    //   safely map to MANUAL_REVIEW with neutral score capped at 60.
+    // - All others (UNSUPPORTED_ISSUER, unconfirmed, network errors) safely map to MANUAL_REVIEW.
     let status = 'MANUAL_REVIEW';
     let verificationScore = Math.min(verification.score || 50, 60);
 
     if (issuerVerification.status === 'VERIFIED' && issuerVerification.success === true) {
       status = 'VERIFIED';
       verificationScore = 100;
+    } else if (issuerVerification.status === 'SUSPICIOUS') {
+      status = 'SUSPICIOUS';
+      verificationScore = 15;
+    } else if (issuerVerification.status === 'VERIFICATION_TIMEOUT') {
+      status = 'VERIFICATION_TIMEOUT';
+      verificationScore = Math.min(verification.score || 50, 50);
     } else if (issuerVerification.status === 'REJECTED') {
       status = 'REJECTED';
       verificationScore = 0;
-    } else if (issuerVerification.status === 'UNSUPPORTED_ISSUER') {
-      status = 'MANUAL_REVIEW';
-      verificationScore = Math.min(verification.score || 50, 60);
     } else {
       status = 'MANUAL_REVIEW';
       verificationScore = Math.min(verification.score || 50, 60);
@@ -229,20 +227,25 @@ async function uploadCertificate(req, res) {
 
     // If text extraction failed completely, enforce MANUAL_REVIEW
     if (!extractedText || extractedText.trim().length === 0) {
-      status = 'MANUAL_REVIEW';
+      if (status !== 'SUSPICIOUS' && status !== 'REJECTED') {
+        status = 'MANUAL_REVIEW';
+      }
       verificationScore = Math.min(verificationScore, 40);
     }
 
-    // Prepare sanitized issuer verification evidence payload
+    // Prepare sanitized issuer verification evidence payload (No secrets/tokens/sensitive headers)
     const issuerEvidencePayload = {
       issuer: issuerVerification.issuer,
-      method: issuerVerification.method,
-      status: issuerVerification.status,
-      httpStatus: issuerVerification.httpStatus || null,
-      certificateIdMatched: Boolean(issuerVerification.certificateIdMatched),
-      latencyMs: issuerVerification.latencyMs || 0,
-      verifiedAt: new Date().toISOString(),
-      reason: issuerVerification.reason || (issuerVerification.status === 'VERIFIED' ? 'Authoritative confirmation received from issuer' : 'Manual verification required'),
+      checkedAt: new Date().toISOString(),
+      verificationUrl: certificateData.verificationUrl || issuerVerification.verificationUrl || null,
+      trustedDomain: Boolean(issuerVerification.evidence?.trustedDomain),
+      officialPageReached: Boolean(issuerVerification.evidence?.verificationPageFound),
+      certificateIdMatched: Boolean(issuerVerification.certificateIdMatched || issuerVerification.evidence?.certificateIdMatched),
+      certificateNameMatched: Boolean(issuerVerification.evidence?.certificateNameMatched),
+      holderNameMatched: Boolean(issuerVerification.evidence?.holderNameMatched),
+      result: status,
+      confidence: issuerVerification.confidence || 0,
+      reason: issuerVerification.reason || (status === 'VERIFIED' ? 'Authoritative confirmation received from issuer' : 'Manual verification required'),
       evidence: issuerVerification.evidence || null,
     };
 
@@ -302,10 +305,29 @@ async function uploadCertificate(req, res) {
         certificateData.certificateId || null,
         certificateData.issueDate || null,
         certificateData.verificationUrl || null,
-        JSON.stringify({ issuerVerification: issuerEvidencePayload }),
+        JSON.stringify(issuerEvidencePayload),
       ]);
       if (insertRes.rows.length > 0) {
         savedRecord = insertRes.rows[0];
+      }
+
+      // Record in verification_logs audit trail
+      if (savedRecord?.id) {
+        try {
+          await pool.query(
+            `INSERT INTO verification_logs (certificate_id, verifier_id, verification_status, verification_method, ip_address, created_at)
+             VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [
+              savedRecord.id,
+              student_id,
+              status,
+              issuerVerification.method || 'OFFICIAL_URL',
+              req.ip || '127.0.0.1',
+            ]
+          );
+        } catch (logErr) {
+          console.warn('Notice: Non-fatal verification log error:', logErr.message);
+        }
       }
 
       // Step 4C requirement 7: Explicitly UPDATE raw_text for the authenticated user's certificate ID
@@ -339,6 +361,13 @@ async function uploadCertificate(req, res) {
       savedRecord.skillAnalysis = skillAnalysis;
     } catch (dbErr) {
       console.error('PostgreSQL certificates table insert error:', dbErr.message, 'Code:', dbErr.code);
+      if (dbErr.code === '23505') {
+        return res.status(409).json({
+          success: false,
+          code: 'DUPLICATE_CERTIFICATE',
+          message: 'This certificate has already been uploaded to your account.',
+        });
+      }
       let userMessage = 'Failed to record certificate in database.';
       if (dbErr.code === '23514') {
         userMessage = 'Certificate could not be saved because its verification status is not supported by database constraints.';
@@ -390,7 +419,111 @@ async function uploadCertificate(req, res) {
   }
 }
 
+/**
+ * Controller: parseCertificateOnly
+ * 
+ * Standalone parse endpoint:
+ * Extracts certificate metadata (name, issuer, certificate ID, issue date, verification URL)
+ * WITHOUT writing or mutating anything in the database.
+ * Cleans up temporary files in a finally block.
+ */
+async function parseCertificateOnly(req, res) {
+  let tempFilePath = null;
+
+  try {
+    // 1. Enforce authenticated student_id
+    if (!req.user || !req.user.id || !UUID_REGEX.test(req.user.id)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required. Please log in to parse a certificate.',
+      });
+    }
+
+    const uploadedFile = req.file || (req.files && req.files[0]);
+    if (!uploadedFile) {
+      return res.status(400).json({
+        success: false,
+        message: 'No certificate file provided.',
+      });
+    }
+
+    const fileExt = path.extname(uploadedFile.originalname || '').toLowerCase();
+    const mimeType = uploadedFile.mimetype || 'application/pdf';
+    const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg'];
+    const allowedMimeTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+
+    if (!allowedExtensions.includes(fileExt) && !allowedMimeTypes.includes(mimeType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file format. Only PDF, PNG, JPG, and JPEG are allowed.',
+      });
+    }
+
+    let fileBuffer = null;
+    if (uploadedFile.buffer) {
+      fileBuffer = uploadedFile.buffer;
+      const uploadDir = path.join(__dirname, '../uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      tempFilePath = path.join(uploadDir, `parse-temp-${uuidv4()}${fileExt || '.pdf'}`);
+      fs.writeFileSync(tempFilePath, fileBuffer);
+    } else if (uploadedFile.path) {
+      tempFilePath = uploadedFile.path;
+      if (fs.existsSync(tempFilePath)) {
+        fileBuffer = fs.readFileSync(tempFilePath);
+      }
+    }
+
+    // Optional user profile context for extraction if available
+    let studentProfile = null;
+    try {
+      const profCheck = await pool.query('SELECT full_name, email FROM profiles WHERE id = $1', [req.user.id]);
+      if (profCheck.rows.length > 0) {
+        studentProfile = profCheck.rows[0];
+      }
+    } catch (e) {
+      // Profile check non-critical for parsing
+    }
+
+    const parseResult = await parseCertificate(tempFilePath, mimeType, fileBuffer);
+    const extractedText = parseResult?.text || '';
+    const extractedData = extractCertificateInfo(extractedText, studentProfile);
+
+    const isPDF = (mimeType || '').toLowerCase().includes('pdf') || fileExt === '.pdf';
+    const file_type = isPDF ? 'pdf' : 'image';
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        certificate_name: extractedData.certificate_name || null,
+        issuer: extractedData.issuer || null,
+        certificate_id: extractedData.certificate_id || null,
+        issue_date: extractedData.issue_date || null,
+        verification_url: extractedData.verification_url || null,
+        file_type,
+        raw_text: extractedText || '',
+      },
+    });
+  } catch (error) {
+    console.error('Error during certificate parse-only:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to parse certificate.',
+    });
+  } finally {
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (cleanupErr) {
+        console.error('Failed to cleanup temporary parse file:', cleanupErr.message);
+      }
+    }
+  }
+}
+
 module.exports = {
   uploadCertificate,
+  parseCertificateOnly,
 };
 

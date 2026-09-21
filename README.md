@@ -1,4 +1,4 @@
-﻿# Student Credential Engine
+# Student Credential Engine
 ### Automated Student Micro-Credential & Skill Verification Engine
 
 An enterprise-ready micro-credentialing and skills verification platform designed for academic institutions, employers, and authorized issuers. The system extracts competencies from certificates, validates credentials against institutional taxonomies, supports SSRF-protected issuer verification, and provides public verification portals.
@@ -98,9 +98,19 @@ VITE_API_URL=http://localhost:5000
 ```
 
 ### 5. Initialize the Database
-Create the database in PostgreSQL and apply `database/schema.sql`:
+
+#### Option A: Brand-New Database Setup
+For a fresh PostgreSQL database, execute the master schema followed by the canonical skills seed:
 ```bash
 psql -U postgres -d student_credential_engine -f database/schema.sql
+psql -U postgres -d student_credential_engine -f database/seed.sql
+```
+
+#### Option B: Existing Database Synchronization
+For an existing database with real data, execute the non-destructive schema migration followed by the canonical skills seed. This safely adds all required columns, constraints, and indexes without dropping tables or deleting data:
+```bash
+psql -U postgres -d student_credential_engine -f database/migrations/sync_current_schema.sql
+psql -U postgres -d student_credential_engine -f database/seed.sql
 ```
 
 ### 6. Run the Application

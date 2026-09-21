@@ -52,7 +52,7 @@ function Skills() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Verified Skills Matrix</h1>
           <p className="text-sm text-slate-500">
-            Competencies extracted and verified from coursework, assessments, and Supabase credential records.
+            Competencies extracted and verified from coursework, assessments, and application credential records.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -94,7 +94,7 @@ function Skills() {
         <div className="py-12 text-center bg-white rounded-xl border border-slate-200">
           <div className="inline-block animate-spin text-2xl mb-2">⏳</div>
           <p className="text-sm font-semibold text-slate-700">Loading verified skills from database...</p>
-          <p className="text-xs text-slate-400 mt-1">Querying Supabase skills and certificate_skills tables</p>
+          <p className="text-xs text-slate-400 mt-1">Querying database skills and certificate_skills records</p>
         </div>
       )}
 

@@ -21,6 +21,7 @@ function Navbar() {
         { label: 'Portfolio', path: '/portfolio' },
         { label: 'Profile', path: '/profile' },
         { label: 'Dashboard', path: '/dashboard' },
+        { label: 'Activities', path: '/activities' },
         { label: 'Certificates', path: '/certificates' },
         { label: 'Skills', path: '/skills' },
         { label: 'Badges', path: '/badges' },

@@ -18,6 +18,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import UploadCertificate from './pages/UploadCertificate';
 import Certificates from './pages/Certificates';
+import Activities from './pages/Activities';
 import Skills from './pages/Skills';
 import Badges from './pages/Badges';
 import BadgeDetails from './pages/BadgeDetails';
@@ -110,6 +111,16 @@ function App() {
             <ProtectedRoute>
               <DashboardLayout>
                 <Certificates />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/activities"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Activities />
               </DashboardLayout>
             </ProtectedRoute>
           }

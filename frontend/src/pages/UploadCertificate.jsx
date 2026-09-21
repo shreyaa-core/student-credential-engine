@@ -1,31 +1,35 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { uploadCertificate } from '../services/certificateService';
+import { parseCertificate, uploadCertificate } from '../services/certificateService';
 import { useAuth } from '../context/AuthContext';
 
 /**
  * UploadCertificate Page Component
  * 
  * Production Flow:
- * React Form -> Express API (/api/certificates/upload) -> Supabase Storage ('certificates') -> PostgreSQL ('certificates')
- * 
- * Displays:
- * - Real upload result card upon completion:
- *   - Certificate ID (from Supabase DB)
- *   - Student ID
- *   - File URL (from Supabase Storage)
- *   - File Type
- *   - Status
- *   - Verification Checks breakdown
+ * 1. User selects certificate file (PDF, PNG, JPG, JPEG).
+ * 2. User clicks "Parse Certificate" -> calls POST /api/certificates/parse.
+ * 3. Frontend displays an editable review form pre-filled with extracted data:
+ *    - Notice: "Please review the extracted certificate details before submitting."
+ *    - certificate_name, issuer, certificate_id, issue_date, verification_url
+ * 4. User corrects/fills any fields and submits -> calls POST /api/certificates/upload.
+ * 5. Complete verification, skill mapping, and PostgreSQL persistence occur.
  */
 function UploadCertificate() {
   const { user } = useAuth();
 
+  // Form input states
   const [certificateName, setCertificateName] = useState('');
   const [issuer, setIssuer] = useState('');
+  const [certificateId, setCertificateId] = useState('');
+  const [issueDate, setIssueDate] = useState('');
+  const [verificationUrl, setVerificationUrl] = useState('');
   const [file, setFile] = useState(null);
 
-  // Status states
+  // Parsing and upload states
+  const [isParsing, setIsParsing] = useState(false);
+  const [isParsed, setIsParsed] = useState(false);
+  const [parseNotice, setParseNotice] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [uploadResult, setUploadResult] = useState(null);
@@ -33,14 +37,65 @@ function UploadCertificate() {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+      setIsParsed(false);
+      setParseNotice(null);
       setErrorMessage(null);
+      setCertificateName('');
+      setIssuer('');
+      setCertificateId('');
+      setIssueDate('');
+      setVerificationUrl('');
+    }
+  };
+
+  const handleParse = async () => {
+    if (!file) {
+      setErrorMessage('Please select a certificate file (PDF, PNG, or JPG) to parse.');
+      return;
+    }
+
+    setIsParsing(true);
+    setErrorMessage(null);
+    setParseNotice(null);
+
+    try {
+      const response = await parseCertificate(file);
+      if (response && response.success && response.data) {
+        const data = response.data;
+        setCertificateName(data.certificate_name || '');
+        setIssuer(data.issuer || '');
+        setCertificateId(data.certificate_id || '');
+        setIssueDate(data.issue_date || '');
+        setVerificationUrl(data.verification_url || '');
+        setIsParsed(true);
+        setParseNotice('Please review the extracted certificate details before submitting.');
+      } else {
+        setErrorMessage(response?.message || 'Failed to extract certificate details. You can enter them manually.');
+        setIsParsed(true);
+      }
+    } catch (err) {
+      console.error('Parse error:', err);
+      const serverMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Could not automatically parse the document. You can still enter details manually.';
+      setErrorMessage(serverMessage);
+      setIsParsed(true);
+    } finally {
+      setIsParsing(false);
     }
   };
 
   const handleReset = () => {
     setCertificateName('');
     setIssuer('');
+    setCertificateId('');
+    setIssueDate('');
+    setVerificationUrl('');
     setFile(null);
+    setIsParsed(false);
+    setParseNotice(null);
     setUploadResult(null);
     setErrorMessage(null);
     const fileInput = document.getElementById('fileInput');
@@ -70,21 +125,37 @@ function UploadCertificate() {
     setErrorMessage(null);
 
     try {
-      // Send file and metadata to Express API
-      const response = await uploadCertificate(file, certificateName, issuer, user?.id);
+      // Send file and reviewed metadata to Express API
+      const certificateData = {
+        certificate_name: certificateName.trim(),
+        issuer: issuer.trim(),
+        certificate_id: certificateId.trim(),
+        issue_date: issueDate.trim(),
+        verification_url: verificationUrl.trim(),
+        student_id: user?.id,
+      };
+
+      const response = await uploadCertificate(file, certificateData);
 
       if (response && response.success) {
         setUploadResult(response);
       } else {
-        setErrorMessage(response.message || 'Failed to upload and save certificate.');
+        setErrorMessage(response?.message || 'Failed to upload and save certificate.');
       }
     } catch (err) {
       console.error('Upload error:', err);
-      const serverMessage =
+      let serverMessage =
         err.response?.data?.message ||
         err.response?.data?.error ||
         err.message ||
         'Failed to connect to the server. Please check backend connection.';
+
+      if (err.response?.status === 409) {
+        serverMessage =
+          err.response?.data?.message ||
+          'This certificate has already been uploaded to your account.';
+      }
+
       setErrorMessage(serverMessage);
     } finally {
       setIsUploading(false);
@@ -384,7 +455,7 @@ function UploadCertificate() {
           </div>
         </div>
       ) : (
-        /* Upload Form View */
+        /* Upload & Parse Flow */
         <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
           {/* Header */}
           <div className="mb-6 border-b border-slate-100 pb-4">
@@ -392,7 +463,7 @@ function UploadCertificate() {
               Upload Certificate
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Submit your micro-credential to register and verify in PostgreSQL.
+              Select your micro-credential to automatically parse its details, review, and register into the database.
             </p>
           </div>
 
@@ -404,125 +475,253 @@ function UploadCertificate() {
             </div>
           )}
 
-          {/* Upload Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Certificate Name Field */}
-            <div>
-              <label
-                htmlFor="certificateName"
-                className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5"
-              >
-                Certificate Name
-              </label>
-              <input
-                id="certificateName"
-                type="text"
-                required
-                disabled={isUploading}
-                value={certificateName}
-                onChange={(e) => setCertificateName(e.target.value)}
-                placeholder="e.g. Full-Stack Web Development & System Design"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100"
-              />
+          {/* Notice: Review Extracted Details */}
+          {parseNotice && (
+            <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-sm flex items-center gap-3">
+              <span className="text-xl">ℹ️</span>
+              <div>
+                <div className="font-semibold">{parseNotice}</div>
+                <div className="text-xs text-blue-700 mt-0.5">
+                  Verify or edit any extracted fields before final submission.
+                </div>
+              </div>
             </div>
+          )}
 
-            {/* Issuer Name Field */}
-            <div>
+          {/* STEP 1: File Selection Area */}
+          <div className="mb-6">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+              1. Select Certificate File
+            </label>
+            <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50 hover:border-indigo-400 hover:bg-slate-50/80 transition-all">
+              <div className="text-3xl mb-2">📄</div>
               <label
-                htmlFor="issuerName"
-                className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5"
+                htmlFor="fileInput"
+                className={`text-sm font-semibold text-indigo-600 hover:text-indigo-800 ${
+                  isParsing || isUploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                }`}
               >
-                Issuer Name
+                <span>{file ? 'Click to change file' : 'Click to browse and choose file'}</span>
+                <input
+                  id="fileInput"
+                  type="file"
+                  disabled={isParsing || isUploading}
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
               </label>
-              <input
-                id="issuerName"
-                type="text"
-                required
-                disabled={isUploading}
-                value={issuer}
-                onChange={(e) => setIssuer(e.target.value)}
-                placeholder="e.g. MIT Open Learning or Stanford Online"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100"
-              />
-            </div>
+              <p className="text-xs text-slate-500 mt-1.5 font-medium">
+                Allowed formats: <span className="font-semibold text-slate-700">PDF, PNG, JPG, JPEG</span> (Max 10MB)
+              </p>
 
-            {/* File Upload Field */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
-                File Upload
-              </label>
-              <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50 hover:border-indigo-400 hover:bg-slate-50/80 transition-all">
-                <div className="text-3xl mb-2">📄</div>
-                <label
-                  htmlFor="fileInput"
-                  className={`text-sm font-semibold text-indigo-600 hover:text-indigo-800 ${
-                    isUploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-                  }`}
-                >
-                  <span>Click to browse and choose file</span>
-                  <input
-                    id="fileInput"
-                    type="file"
-                    disabled={isUploading}
-                    accept=".pdf,.png,.jpg,.jpeg"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </label>
-                <p className="text-xs text-slate-500 mt-1.5 font-medium">
-                  Allowed formats: <span className="font-semibold text-slate-700">PDF, PNG, JPG</span>
-                </p>
-
-                {/* Selected File Feedback */}
-                {file && (
-                  <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-800 text-xs font-medium border border-indigo-200">
+              {/* Selected File Details & Parse Action */}
+              {file && (
+                <div className="mt-4 pt-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-800 text-xs font-medium border border-indigo-200">
                     <span>📎</span>
                     <span className="truncate max-w-xs">{file.name}</span>
                     <span className="text-indigo-600 font-normal">
                       ({(file.size / 1024).toFixed(1)} KB)
                     </span>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* Submit / Upload Button */}
-            <div className="pt-3">
-              <button
-                type="submit"
-                disabled={isUploading}
-                className="w-full py-3 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors cursor-pointer disabled:bg-indigo-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isUploading ? (
-                  <>
-                    <svg
-                      className="animate-spin h-4 w-4 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
+                  {!isParsed && (
+                    <button
+                      type="button"
+                      onClick={handleParse}
+                      disabled={isParsing}
+                      className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer disabled:bg-indigo-400 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    <span>Uploading certificate...</span>
-                  </>
-                ) : (
-                  <span>Upload Certificate</span>
-                )}
-              </button>
+                      {isParsing ? (
+                        <>
+                          <svg
+                            className="animate-spin h-3.5 w-3.5 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          <span>Reading certificate...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>⚡</span>
+                          <span>Parse Certificate</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          </form>
+          </div>
+
+          {/* STEP 2: Editable Review Form (shown once parsed or file selected) */}
+          {isParsed && (
+            <form onSubmit={handleSubmit} className="space-y-4 pt-2 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  2. Review & Submit Details
+                </span>
+                <button
+                  type="button"
+                  onClick={handleParse}
+                  disabled={isParsing || isUploading}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer underline"
+                >
+                  Re-parse file
+                </button>
+              </div>
+
+              {/* Certificate Name Field */}
+              <div>
+                <label
+                  htmlFor="certificateName"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1"
+                >
+                  Certificate / Course Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  id="certificateName"
+                  type="text"
+                  required
+                  disabled={isUploading}
+                  value={certificateName}
+                  onChange={(e) => setCertificateName(e.target.value)}
+                  placeholder="e.g. Full-Stack Web Development & System Design"
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100"
+                />
+              </div>
+
+              {/* Issuer Name Field */}
+              <div>
+                <label
+                  htmlFor="issuerName"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1"
+                >
+                  Issuer Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  id="issuerName"
+                  type="text"
+                  required
+                  disabled={isUploading}
+                  value={issuer}
+                  onChange={(e) => setIssuer(e.target.value)}
+                  placeholder="e.g. Coursera, Stanford Online, or MIT"
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100"
+                />
+              </div>
+
+              {/* Grid: Certificate ID & Issue Date */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="certificateId"
+                    className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1"
+                  >
+                    Certificate ID / Credential ID
+                  </label>
+                  <input
+                    id="certificateId"
+                    type="text"
+                    disabled={isUploading}
+                    value={certificateId}
+                    onChange={(e) => setCertificateId(e.target.value)}
+                    placeholder="e.g. CERT-89421 or UUID"
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100 font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="issueDate"
+                    className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1"
+                  >
+                    Issue Date (YYYY-MM-DD)
+                  </label>
+                  <input
+                    id="issueDate"
+                    type="date"
+                    disabled={isUploading}
+                    value={issueDate}
+                    onChange={(e) => setIssueDate(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100"
+                  />
+                </div>
+              </div>
+
+              {/* Verification URL Field */}
+              <div>
+                <label
+                  htmlFor="verificationUrl"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1"
+                >
+                  Verification URL
+                </label>
+                <input
+                  id="verificationUrl"
+                  type="url"
+                  disabled={isUploading}
+                  value={verificationUrl}
+                  onChange={(e) => setVerificationUrl(e.target.value)}
+                  placeholder="https://coursera.org/verify/..."
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100 text-xs font-mono"
+                />
+              </div>
+
+              {/* Submit / Upload Button */}
+              <div className="pt-3">
+                <button
+                  type="submit"
+                  disabled={isUploading}
+                  className="w-full py-3 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors cursor-pointer disabled:bg-indigo-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isUploading ? (
+                    <>
+                      <svg
+                        className="animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <span>Uploading certificate...</span>
+                    </>
+                  ) : (
+                    <span>Upload Certificate</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       )}
     </div>
@@ -530,4 +729,3 @@ function UploadCertificate() {
 }
 
 export default UploadCertificate;
-

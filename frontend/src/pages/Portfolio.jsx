@@ -170,7 +170,7 @@ function Portfolio() {
           <div className="inline-block animate-spin text-3xl mb-3">⏳</div>
           <h3 className="text-base font-bold text-slate-800">Loading Portfolio...</h3>
           <p className="text-xs text-slate-400 mt-1">
-            Querying profiles, certificates, skills, and badges tables from Supabase
+            Querying profiles, certificates, skills, and badges tables from application database
           </p>
         </div>
       )}
@@ -311,7 +311,7 @@ function Portfolio() {
                   <span>📜</span> Verified Certificates
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Accredited credentials verified through institutional signing keys from Supabase database.
+                  Accredited credentials verified through institutional signing keys from the application database.
                 </p>
               </div>
               <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
@@ -386,7 +386,7 @@ function Portfolio() {
                   <span>⚡</span> Verified Skills
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Technical competencies verified and mapped from coursework records in Supabase.
+                  Technical competencies verified and mapped from coursework records in the application database.
                 </p>
               </div>
               <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">

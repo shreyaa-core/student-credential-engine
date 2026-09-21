@@ -19,6 +19,7 @@ function Sidebar({ isOpen, onClose }) {
   const rawMenuItems = [
     { to: '/dashboard', label: 'Overview', icon: '📊' },
     { to: '/profile', label: 'My Profile', icon: '👤' },
+    { to: '/activities', label: 'Activity Logs', icon: '🎯' },
     { to: '/certificates', label: 'My Certificates', icon: '📜' },
     { to: '/upload', label: 'Upload Certificate', icon: '📤' },
     { to: '/skills', label: 'Verified Skills', icon: '⚡' },

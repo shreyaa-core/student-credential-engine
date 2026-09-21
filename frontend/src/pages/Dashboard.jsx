@@ -28,6 +28,7 @@ function Dashboard() {
     pendingCertificates: 0,
     skillsEarned: 0,
     badgesEarned: 0,
+    totalActivities: 0,
     recentCertificates: [],
     latestBadges: [],
   });
@@ -52,6 +53,7 @@ function Dashboard() {
         pendingCertificates: data.pendingCertificates ?? data.pending_certificates ?? 0,
         skillsEarned: data.skillsEarned ?? data.skills_earned ?? 0,
         badgesEarned: data.badgesEarned ?? data.badges_earned ?? 0,
+        totalActivities: data.totalActivities ?? data.total_activities ?? 0,
         recentCertificates: Array.isArray(data.recentCertificates) ? data.recentCertificates : [],
         latestBadges: Array.isArray(data.latestBadges) ? data.latestBadges : [],
       });
@@ -117,6 +119,15 @@ function Dashboard() {
       bgColor: 'bg-indigo-50',
       textColor: 'text-indigo-600',
       borderColor: 'border-indigo-100',
+    },
+    {
+      label: 'Activities Logged',
+      value: dashboardData.totalActivities,
+      subtitle: 'Co-curricular records',
+      icon: '🎯',
+      bgColor: 'bg-teal-50',
+      textColor: 'text-teal-600',
+      borderColor: 'border-teal-100',
     },
   ];
 
@@ -188,12 +199,12 @@ function Dashboard() {
       {isLoading && (
         <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-2">
           <span className="animate-spin text-sm">⏳</span>
-          Loading live database metrics from Supabase...
+          Loading live database metrics from application database...
         </div>
       )}
 
-      {/* Five Summary Cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      {/* Six Summary Cards */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {summaryMetrics.map((card, index) => (
           <div
             key={index}
@@ -226,7 +237,7 @@ function Dashboard() {
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Recent Certificates</h2>
-            <p className="text-xs text-slate-500">Latest micro-credentials stored in Supabase database</p>
+            <p className="text-xs text-slate-500">Latest micro-credentials stored in the application database</p>
           </div>
           <Link
             to="/certificates"
@@ -299,7 +310,7 @@ function Dashboard() {
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Latest Badges</h2>
-            <p className="text-xs text-slate-500">Digital achievement badges awarded from Supabase</p>
+            <p className="text-xs text-slate-500">Digital achievement badges awarded from the application database</p>
           </div>
           <Link
             to="/badges"

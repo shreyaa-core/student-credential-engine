@@ -31,7 +31,7 @@ router.get(['/certificates', '/'], adminAuth, async (req, res) => {
   try {
     // Query certificates table from PostgreSQL for administrative review
     const result = await pool.query(`
-      SELECT id, certificate_name, issuer, status, verification_score, created_at 
+      SELECT id, certificate_name, issuer, status, verification_score, verification_url, verification_evidence, created_at 
       FROM certificates 
       ORDER BY created_at DESC;
     `);
@@ -43,6 +43,8 @@ router.get(['/certificates', '/'], adminAuth, async (req, res) => {
       issuer: item.issuer,
       status: item.status,
       verification_score: item.verification_score !== undefined ? item.verification_score : 0,
+      verification_url: item.verification_url || null,
+      verification_evidence: item.verification_evidence || null,
       created_at: item.created_at,
     }));
 

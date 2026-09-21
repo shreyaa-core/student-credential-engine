@@ -113,7 +113,23 @@ function Admin() {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-          {status ? status.replace(/_/g, ' ') : 'Pending'}
+          {status ? status.replace(/_/g, ' ') : 'Manual Review'}
+        </span>
+      );
+    }
+    if (s === 'SUSPICIOUS') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-700"></span>
+          Suspicious
+        </span>
+      );
+    }
+    if (s === 'VERIFICATION_TIMEOUT' || s === 'TIMEOUT') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+          Verification Timeout
         </span>
       );
     }
@@ -141,7 +157,7 @@ function Admin() {
             Admin Dashboard
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Real-time administrative verification console connected to Supabase backend.
+            Real-time administrative verification console connected to the application backend.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -277,7 +293,7 @@ function Admin() {
               Certificate Submissions
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Live records from backend Supabase PostgreSQL database.
+              Live records from backend PostgreSQL database.
             </p>
           </div>
           <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-lg self-start sm:self-auto">

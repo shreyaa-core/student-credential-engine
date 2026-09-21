@@ -144,7 +144,7 @@ function Certificates() {
         <div className="py-12 text-center bg-white rounded-xl border border-slate-200">
           <div className="inline-block animate-spin text-2xl mb-2">⏳</div>
           <p className="text-sm font-semibold text-slate-700">Loading certificates from database...</p>
-          <p className="text-xs text-slate-400 mt-1">Connecting to Supabase PostgreSQL</p>
+          <p className="text-xs text-slate-400 mt-1">Connecting to application database</p>
         </div>
       )}
 

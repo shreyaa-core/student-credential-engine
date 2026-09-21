@@ -63,16 +63,34 @@ router.get(['/', '/api/dashboard'], requireAuth, async (req, res) => {
         verificationScore: c.verification_score || 0,
       }));
 
-      // 2. Fetch skills count earned strictly through this user's certificates
+      // 2. Fetch skills count earned strictly through this user's certificates and activity logs
       const skillsResult = await pool.query(
-        `SELECT COUNT(DISTINCT cs.skill_id)::int AS count
-         FROM certificates c
-         JOIN certificate_skills cs ON c.id = cs.certificate_id
-         WHERE c.student_id = $1;`,
+        `SELECT COUNT(DISTINCT skill_id)::int AS count
+         FROM (
+           SELECT cs.skill_id
+           FROM certificates c
+           JOIN certificate_skills cs ON c.id = cs.certificate_id
+           WHERE c.student_id = $1
+           UNION
+           SELECT ask.skill_id
+           FROM activity_logs a
+           JOIN activity_skills ask ON a.id = ask.activity_id
+           WHERE a.student_id = $1
+         ) user_skills;`,
         [studentId]
       );
       if (skillsResult.rows && skillsResult.rows.length > 0) {
         skillsEarned = skillsResult.rows[0].count || 0;
+      }
+
+      // Fetch activities count for this user
+      let totalActivities = 0;
+      const actCountRes = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM activity_logs WHERE student_id = $1;`,
+        [studentId]
+      );
+      if (actCountRes.rows && actCountRes.rows.length > 0) {
+        totalActivities = actCountRes.rows[0].count || 0;
       }
 
       // 3. Fetch badges earned strictly by this user
@@ -166,6 +184,8 @@ router.get(['/', '/api/dashboard'], requireAuth, async (req, res) => {
       skills_earned: skillsEarned,
       badgesEarned,
       badges_earned: badgesEarned,
+      totalActivities,
+      total_activities: totalActivities,
       recentCertificates,
       latestBadges,
     });
