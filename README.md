@@ -135,3 +135,61 @@ npm run dev
 
 - **Issuer**: Standard user role for institutions and authorized bodies to upload credentials, view transcripts, and inspect portfolio milestones.
 - **Admin**: System administrator role for auditing submissions, approving/rejecting credentials, and managing platform compliance.
+
+---
+
+## 🧪 Automated Testing & Final 20-Certificate Acceptance Suite
+
+The engine includes exhaustive test suites covering all system subsystems and an end-to-end 20-certificate acceptance test:
+
+### Running the Final 20-Certificate Acceptance Test (Step 7)
+```bash
+cd backend
+npm run test:acceptance
+```
+This suite ingests 20 sample third-party certificates across 5 categories:
+- **8 Valid Credentials**: NPTEL, Coursera, edX, Credly, and Accredible certificates verified against authoritative sources.
+- **4 Forged / Adversarial Credentials**: Suffix spoofing/typosquatting, altered credential IDs, revoked certificates, and SSRF metadata attacks (confirming 0 forged credentials are automatically verified).
+- **4 Manual Review Credentials**: Unsupported issuers, missing verification URLs, network timeouts, and HTTP 200 responses without credential evidence.
+- **2 OCR / Scanned Credentials**: Image-only PDF and PNG certificates processed via Tesseract OCR.
+- **2 Edge / Malformed Credentials**: Corrupt PDF stream and incomplete metadata documents handled gracefully.
+
+**Key Measured Metrics:**
+- **Overall Case Pass Rate**: 20/20 (100.0%)
+- **Forged Credentials Verified**: 0 (Critical security invariant verified)
+- **Skill Precision**: 0.9474
+- **Skill Recall**: 1.0000 (100% recall of expected canonical skills)
+- **Skill F1 Score**: 0.9730
+- **Open Badges 3.0 Restriction**: 100% enforced (Issued strictly for `VERIFIED`)
+- **Transcript Inclusion**: 100% enforced (Included strictly for `VERIFIED`)
+- **Database Residual Data**: 0 leaked rows (Exact baseline restored)
+
+Results are automatically saved to:
+- Machine-readable: `backend/tests/results/acceptance-20-certificates.json`
+- Human-readable: `backend/tests/results/acceptance-20-certificates.md`
+
+### Running Regression Test Suites
+```bash
+cd backend
+
+# Step 1: Database schema consistency validation
+npm run test:database
+
+# Step 2: Automatic certificate parsing & OCR
+npm run test:parser
+
+# User-scoped duplicate prevention test
+node tests/testDuplicatePrevention.js
+
+# Step 3: Certificate authenticity verification & SSRF defense
+node tests/issuerVerification.test.js
+
+# Step 4: Activity logs & skill taxonomy mapping
+node tests/activityLogs.test.js
+
+# Step 5: Open Badges 3.0 & cryptographic verifiable credentials
+node tests/openBadges.test.js
+
+# Step 6: Comprehensive co-curricular transcript builder
+node tests/transcript.test.js
+```

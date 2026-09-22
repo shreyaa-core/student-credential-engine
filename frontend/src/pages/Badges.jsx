@@ -24,7 +24,7 @@ function Badges() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
 
-  // Fetch real-time verified credential report from API
+  // Fetch real-time verified credential report and badge list from API
   const fetchReport = async () => {
     const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
     if (!activeToken) {
@@ -36,11 +36,22 @@ function Badges() {
     try {
       setIsLoading(true);
       setErrorMessage(null);
-      const response = await axios.get('http://localhost:5000/api/badges/report', {
-        headers: { Authorization: `Bearer ${activeToken}` },
-      });
-      if (response.data && response.data.success && response.data.report) {
-        setReport(response.data.report);
+
+      // Fetch verified report and trigger badge list synchronization in parallel
+      const [reportRes, badgesRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/badges/report', {
+          headers: { Authorization: `Bearer ${activeToken}` },
+        }),
+        axios.get('http://localhost:5000/api/badges', {
+          headers: { Authorization: `Bearer ${activeToken}` },
+        }).catch((bErr) => {
+          console.warn('Non-critical badge list sync notice:', bErr.message);
+          return null;
+        }),
+      ]);
+
+      if (reportRes.data && reportRes.data.success && reportRes.data.report) {
+        setReport(reportRes.data.report);
       } else {
         throw new Error('Unexpected response format received from report server.');
       }

@@ -26,6 +26,7 @@ import Portfolio from './pages/Portfolio';
 import Profile from './pages/Profile';
 import Transcript from './pages/Transcript';
 import Verify from './pages/Verify';
+import VerifyBadge from './pages/VerifyBadge';
 import Admin from './pages/Admin';
 
 /**
@@ -80,6 +81,14 @@ function App() {
           element={
             <MainLayout>
               <Verify />
+            </MainLayout>
+          }
+        />
+        <Route
+          path="/verify/badge/:credentialId"
+          element={
+            <MainLayout>
+              <VerifyBadge />
             </MainLayout>
           }
         />

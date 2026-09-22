@@ -106,7 +106,7 @@ function Portfolio() {
 
   // Derive digital badges dynamically from verified certificates if none in badges table
   let displayBadges = [...badges];
-  if (displayBadges.length === 0) {
+  if (displayBadges.length === 0 && certificates.length > 0) {
     const verifiedList = certificates.filter((c) =>
       ['VERIFIED', 'APPROVED'].includes((c.status || '').toUpperCase())
     );
@@ -114,8 +114,9 @@ function Portfolio() {
       const skillNames = skills.map((s) => s.name).filter(Boolean);
       return {
         id: `badge-${cert.id}`,
+        certificate_id: cert.id,
         name: `${cert.title || cert.certificate_name} Badge`,
-        issuer: cert.issuer || 'Credential Authority',
+        issuer: cert.issuer || 'Bitwave Credential Engine',
         criteria: skillNames.length > 0
           ? `Demonstrated competency in ${skillNames.join(', ')}`
           : 'Verified Credential Achievement',
@@ -125,6 +126,21 @@ function Portfolio() {
       };
     });
   }
+
+  // Strictly enforce 1 badge per verified certificate to prevent any duplicate rendering
+  const seenBadgeCertIds = new Set();
+  const uniqueDisplayBadges = [];
+  for (const b of displayBadges) {
+    const certKey = b.certificate_id || b.certificateId || b.id;
+    if (certKey && seenBadgeCertIds.has(certKey)) {
+      continue;
+    }
+    if (certKey) {
+      seenBadgeCertIds.add(certKey);
+    }
+    uniqueDisplayBadges.push(b);
+  }
+  displayBadges = uniqueDisplayBadges;
 
   const profile = portfolioData.profile || {
     name: user?.name || user?.email?.split('@')[0] || 'User',
@@ -443,7 +459,7 @@ function Portfolio() {
                 </p>
               </div>
               <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                {displayBadges.length} Badges Earned
+                {displayBadges.length} {displayBadges.length === 1 ? 'Badge Earned' : 'Badges Earned'}
               </span>
             </div>
 
@@ -451,8 +467,8 @@ function Portfolio() {
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {displayBadges.map((badge) => (
                   <Link
-                    key={badge.id}
-                    to={`/badges/${badge.id}`}
+                    key={badge.id || badge.credential_id}
+                    to={`/badges/${badge.credential_id || badge.id}`}
                     className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center flex flex-col items-center justify-between hover:shadow-md hover:border-indigo-300 transition-all relative overflow-hidden group cursor-pointer"
                   >
                     <div className="flex flex-col items-center">
@@ -471,7 +487,7 @@ function Portfolio() {
                         {badge.name}
                       </h4>
                       <p className="text-xs font-semibold text-indigo-600 mb-2">
-                        {badge.issuer || 'Credential Authority'}
+                        {badge.issuer || 'Bitwave Credential Engine'}
                       </p>
                       <p className="text-xs text-slate-500 mb-4 px-2 leading-relaxed">
                         {badge.criteria}

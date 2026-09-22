@@ -18,6 +18,7 @@ function BadgeDetails() {
   const { user, token } = useAuth();
 
   const [report, setReport] = useState(null);
+  const [badgeRecord, setBadgeRecord] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -31,18 +32,38 @@ function BadgeDetails() {
       return;
     }
 
+    const rawId = (badgeId || '').trim();
+    if (!rawId || rawId === 'undefined' || rawId === 'null') {
+      setIsLoading(false);
+      setErrorMessage('A valid badge identifier is required.');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setErrorMessage(null);
 
-      const response = await axios.get('http://localhost:5000/api/badges/report', {
+      const reportPromise = axios.get('http://localhost:5000/api/badges/report', {
         headers: { Authorization: `Bearer ${activeToken}` },
       });
 
-      if (response.data && response.data.success && response.data.report) {
-        setReport(response.data.report);
+      const cleanId = rawId.replace(/^badge-/, '');
+      const badgePromise = axios
+        .get(`http://localhost:5000/api/badges/${cleanId}`, {
+          headers: { Authorization: `Bearer ${activeToken}` },
+        })
+        .catch(() => null);
+
+      const [reportRes, badgeRes] = await Promise.all([reportPromise, badgePromise]);
+
+      if (reportRes.data && reportRes.data.success && reportRes.data.report) {
+        setReport(reportRes.data.report);
       } else {
         throw new Error('Unexpected response format received from report server.');
+      }
+
+      if (badgeRes && badgeRes.data) {
+        setBadgeRecord(badgeRes.data);
       }
     } catch (err) {
       console.error('Failed to load badge details:', err);
@@ -89,12 +110,39 @@ function BadgeDetails() {
     }
   };
 
-  // Find the certificate matching the badgeId parameter
+  // Download raw Open Badges 3.0 JSON-LD credential file
+  const handleDownloadJsonLd = () => {
+    if (!badgeRecord?.credential_json) return;
+    const jsonStr = JSON.stringify(badgeRecord.credential_json, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/ld+json' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `OpenBadge-${badgeRecord.credential_id || 'credential'}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  };
+
+  // Find the certificate matching the badgeId parameter or the badgeRecord's certificate_id
   const verifiedCerts = Array.isArray(report?.verifiedCertificates) ? report.verifiedCertificates : [];
   const cleanId = (badgeId || '').replace(/^badge-/, '');
+  const targetCertId = badgeRecord?.certificate_id || badgeRecord?.certificateId;
   const matchedCert = verifiedCerts.find(
-    (c) => c.id === badgeId || c.id === cleanId || `badge-${c.id}` === badgeId
-  );
+    (c) =>
+      c.id === badgeId ||
+      c.id === cleanId ||
+      `badge-${c.id}` === badgeId ||
+      (targetCertId && (c.id === targetCertId || `badge-${c.id}` === targetCertId))
+  ) || (badgeRecord ? {
+    id: badgeRecord.certificate_id || cleanId,
+    certificateName: badgeRecord.certificate_name || badgeRecord.name?.replace(/\s+Badge$/i, '') || 'Verified Credential',
+    issuer: badgeRecord.cert_issuer || badgeRecord.issuer || 'Bitwave Credential Engine',
+    issueDate: badgeRecord.issued_at || badgeRecord.created_at,
+    status: badgeRecord.cert_status || 'VERIFIED',
+    skills: []
+  } : null);
 
   const issuerName = report?.issuer?.fullName || user?.name || 'Issuer';
   const issuerRole = report?.issuer?.role || user?.role || 'Issuer';
@@ -241,7 +289,7 @@ function BadgeDetails() {
                   Issuing Organization
                 </span>
                 <p className="text-xs font-bold text-slate-900 mt-1 truncate">
-                  {matchedCert.issuer || 'Credential Authority'}
+                  {matchedCert.issuer || badgeRecord?.cert_issuer || badgeRecord?.issuer || 'Bitwave Credential Engine'}
                 </p>
                 <span className="text-[10px] text-slate-500 block">
                   Verified Issuer
@@ -274,6 +322,120 @@ function BadgeDetails() {
             </div>
           </div>
 
+          {/* Section: Open Badges 3.0 & Cryptographic Verification */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-violet-50 text-violet-700 border border-violet-100 mb-1">
+                  <span>🔐</span> 1EdTech Open Badges 3.0 Standard
+                </div>
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                  CRYPTOGRAPHIC PROOF & PUBLIC VERIFICATION
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Signed with W3C DataIntegrityProof and Ed25519 canonical hashing (eddsa-rdfc-2022).
+                </p>
+              </div>
+
+              {badgeRecord?.credential_id && (
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={`/verify/badge/${badgeRecord.credential_id}`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors"
+                  >
+                    <span>🔍</span> Verify Online →
+                  </Link>
+                  <button
+                    onClick={handleDownloadJsonLd}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Download raw Open Badges 3.0 JSON-LD credential"
+                  >
+                    <span>📄</span> Download JSON-LD
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+              {/* QR Code Container */}
+              <div className="flex flex-col items-center justify-center p-5 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                {badgeRecord?.qrCode ? (
+                  <img
+                    src={badgeRecord.qrCode}
+                    alt="Badge Verification QR Code"
+                    className="w-40 h-40 rounded-lg shadow-sm border border-slate-200 bg-white p-2"
+                  />
+                ) : (
+                  <div className="w-40 h-40 rounded-lg border border-dashed border-slate-300 flex items-center justify-center bg-white text-slate-400 text-xs">
+                    QR Not Available
+                  </div>
+                )}
+                <span className="text-[11px] font-semibold text-slate-600 mt-3">
+                  Scan to Verify Badge
+                </span>
+                <span className="text-[10px] text-slate-400 mt-0.5">
+                  Points to public verification portal
+                </span>
+              </div>
+
+              {/* Cryptographic Details */}
+              <div className="md:col-span-2 space-y-3">
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Credential ID (UUID)
+                  </span>
+                  <p className="text-xs font-mono font-bold text-slate-800 break-all mt-0.5 select-all">
+                    {badgeRecord?.credential_id || 'Generating / Pending'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Standard
+                    </span>
+                    <p className="text-xs font-bold text-indigo-700 mt-0.5">
+                      Open Badges 3.0
+                    </p>
+                    <span className="text-[10px] text-slate-400">
+                      W3C VC v2.0
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Cryptosuite
+                    </span>
+                    <p className="text-xs font-bold text-emerald-700 mt-0.5 font-mono">
+                      eddsa-rdfc-2022
+                    </p>
+                    <span className="text-[10px] text-slate-400">
+                      Ed25519 Multikey
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Public Verification URL
+                  </span>
+                  {badgeRecord?.credential_id ? (
+                    <Link
+                      to={`/verify/badge/${badgeRecord.credential_id}`}
+                      className="text-xs font-mono text-indigo-600 hover:text-indigo-800 break-all block mt-0.5 underline"
+                    >
+                      {window.location.origin}/verify/badge/{badgeRecord.credential_id}
+                    </Link>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic mt-0.5">
+                      Verification link available once badge is issued
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Section: Verified Credential Details */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-4">
             <div className="border-b border-slate-100 pb-3">
@@ -292,7 +454,7 @@ function BadgeDetails() {
                     {matchedCert.certificateName}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Issued by <span className="font-semibold text-slate-700">{matchedCert.issuer || 'Credential Authority'}</span>
+                    Issued by <span className="font-semibold text-slate-700">{matchedCert.issuer || badgeRecord?.cert_issuer || badgeRecord?.issuer || 'Bitwave Credential Engine'}</span>
                   </p>
                 </div>
                 <span className="self-start sm:self-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">

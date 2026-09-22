@@ -1,38 +1,26 @@
 // ==============================================================================
 // Student Micro-Credential Verification Engine - Badge Service
+// Standard: 1EdTech Open Badges 3.0 compatible wrapper
 // ==============================================================================
 
+const crypto = require('crypto');
+const openBadgeService = require('./openBadgeService');
+
 /**
- * Generates a random 6-digit credential ID matching the CRED-XXXXXX pattern.
- * Example: CRED-928374
+ * Generates a cryptographically random UUID credential identifier.
+ * NEVER uses Math.random().
  * 
- * @returns {string} - Formatted credential ID
+ * @returns {string} - Secure UUID
  */
 function generateCredentialId() {
-  const randomSixDigits = Math.floor(100000 + Math.random() * 900000);
-  return `CRED-${randomSixDigits}`;
+  return crypto.randomUUID();
 }
 
 /**
- * Generates digital badge information for a verified certificate.
+ * Generates digital badge metadata aligned with Open Badges 3.0 definitions.
  * 
  * @param {object} certificateData - Verified certificate input data
- * @param {string} certificateData.studentName - Full name of the student
- * @param {string} certificateData.courseName - Name of the course or credential
- * @param {string} certificateData.issuer - Name of the issuing organization
- * @param {string[]} certificateData.skills - Array of verified skills
- * 
- * @returns {{
- *   credentialId: string,
- *   badgeName: string,
- *   issuedDate: string,
- *   metadata: {
- *     studentName: string,
- *     courseName: string,
- *     issuer: string,
- *     skills: string[]
- *   }
- * }}
+ * @returns {object} Badge metadata object with secure credentialId
  */
 function generateBadge(certificateData = {}) {
   const {
@@ -42,21 +30,16 @@ function generateBadge(certificateData = {}) {
     skills = [],
   } = certificateData;
 
-  // 1. Generate unique 6-digit credential identifier (CRED-XXXXXX)
   const credentialId = generateCredentialId();
-
-  // 2. Generate descriptive badge name from course title
   const badgeName = courseName ? `${courseName} Badge` : 'Verified Credential Badge';
-
-  // 3. Current date in YYYY-MM-DD format
   const issuedDate = new Date().toISOString().split('T')[0];
 
-  // 4. Detailed metadata object preserving credential context
   const metadata = {
     studentName,
     courseName,
-    issuer,
+    issuer: issuer || 'Credential Authority',
     skills: Array.isArray(skills) ? skills : [],
+    format: 'Open Badges 3.0',
   };
 
   return {
@@ -72,4 +55,5 @@ module.exports = {
   generateBadgeInfo: generateBadge,
   createBadge: generateBadge,
   generateCredentialId,
+  openBadgeService,
 };

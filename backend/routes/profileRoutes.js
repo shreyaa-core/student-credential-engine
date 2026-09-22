@@ -5,6 +5,7 @@
 const express = require('express');
 const pool = require('../config/database');
 const { requireAuth } = require('../middleware/authMiddleware');
+const { issueBadgeForCertificate, getIssuerConfig } = require('../services/openBadgeService');
 
 const router = express.Router();
 
@@ -80,54 +81,70 @@ async function fetchUserProfileData(userId) {
     verifiedBy: parseInt(s.verifiedBy, 10) || 0,
   }));
 
-  // 4. Fetch Badges awarded strictly to this user
+  // 4. Ensure authentic Open Badges 3.0 exist for all verified/approved certificates
+  try {
+    const pendingCertsRes = await pool.query(
+      `SELECT id FROM certificates 
+       WHERE student_id = $1 
+         AND UPPER(status) IN ('VERIFIED', 'APPROVED')
+         AND id NOT IN (SELECT certificate_id FROM badges WHERE certificate_id IS NOT NULL)`,
+      [userId]
+    );
+
+    for (const row of pendingCertsRes.rows || []) {
+      try {
+        await issueBadgeForCertificate(row.id, userId);
+      } catch (autoErr) {
+        console.warn(`[AutoBadge] Could not auto-issue badge for cert ${row.id}:`, autoErr.message);
+      }
+    }
+  } catch (syncErr) {
+    console.warn('Notice: Non-critical auto-badge check notice:', syncErr.message);
+  }
+
+  // 5. Fetch Badges awarded strictly to this user from authoritative badges table
+  const config = getIssuerConfig ? getIssuerConfig() : { issuerName: 'Bitwave Credential Engine' };
   const badgeRes = await pool.query(
-    `SELECT id, student_id, certificate_id, name, image_url, criteria, created_at 
-     FROM badges 
-     WHERE student_id = $1 
-     ORDER BY created_at DESC`,
+    `SELECT b.id, b.student_id, b.certificate_id, b.credential_id, b.name, b.image_url, b.criteria, b.created_at, b.issued_at,
+            c.issuer AS cert_issuer, c.certificate_name, c.status AS cert_status
+     FROM badges b
+     LEFT JOIN certificates c ON b.certificate_id = c.id
+     WHERE b.student_id = $1 
+     ORDER BY b.created_at DESC`,
     [userId]
   );
 
-  const badges = (badgeRes.rows || []).map((b) => ({
-    id: b.id,
-    name: b.name,
-    issuer: 'Credential Authority',
-    criteria: b.criteria || null,
-    image_url: b.image_url || '',
-    icon: b.image_url || '🏅',
-    earnedDate: b.created_at
-      ? new Date(b.created_at).toLocaleDateString('en-US', {
-          month: 'short',
-          year: 'numeric',
-        })
-      : null,
-  }));
+  // Map authoritative badges with strict distinct certificate_id tracking (1 badge per certificate)
+  const badges = [];
+  const seenCertificateIds = new Set();
 
-  // Synchronize and include digital badges dynamically for any verified / approved certificates
-  const existingBadgeCertIds = new Set(badges.map((b) => b.certificate_id).filter(Boolean));
-  for (const cert of certificates) {
-    const isVerified = ['VERIFIED', 'APPROVED'].includes((cert.status || '').toUpperCase());
-    if (isVerified && !existingBadgeCertIds.has(cert.id)) {
-      const certSkills = skills
-        .filter((s) => s.verifiedBy > 0)
-        .map((s) => s.name);
-      const criteriaText = certSkills.length > 0
-        ? `Demonstrated competency in ${certSkills.join(', ')}`
-        : 'Verified Credential Achievement';
-
-      badges.push({
-        id: `badge-${cert.id}`,
-        student_id: userId,
-        certificate_id: cert.id,
-        name: `${cert.title || cert.certificate_name} Badge`,
-        issuer: cert.issuer || 'Credential Authority',
-        criteria: criteriaText,
-        image_url: '',
-        icon: '🏅',
-        earnedDate: cert.issueDate || 'Recent',
-      });
+  for (const b of badgeRes.rows || []) {
+    if (b.certificate_id && seenCertificateIds.has(b.certificate_id)) {
+      continue; // Guarantee strict 1:1 certificate to badge relationship
     }
+    if (b.certificate_id) {
+      seenCertificateIds.add(b.certificate_id);
+    }
+
+    badges.push({
+      id: b.id,
+      credential_id: b.credential_id,
+      credentialId: b.credential_id,
+      certificate_id: b.certificate_id,
+      certificateId: b.certificate_id,
+      student_id: b.student_id,
+      name: b.name || `${b.certificate_name || 'Verified Credential'} Badge`,
+      issuer: b.cert_issuer || config.issuerName,
+      criteria: b.criteria || null,
+      image_url: b.image_url || '',
+      icon: b.image_url || '🏅',
+      earnedDate: b.issued_at || b.created_at
+        ? new Date(b.issued_at || b.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            year: 'numeric',
+          })
+        : 'Recent',
+    });
   }
 
   const totalCertificates = certificates.length;

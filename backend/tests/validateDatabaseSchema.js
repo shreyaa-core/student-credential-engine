@@ -72,6 +72,17 @@ const CANONICAL_SKILLS = [
   { name: 'Deep Learning', category: 'Artificial Intelligence' },
 ];
 
+const REQUIRED_BADGE_COLUMNS = [
+  'id',
+  'student_id',
+  'certificate_id',
+  'name',
+  'credential_id',
+  'credential_json',
+  'issued_at',
+  'created_at',
+];
+
 async function validateSchema() {
   console.log('===============================================================');
   console.log('STARTING DATABASE SCHEMA CONSISTENCY VALIDATION');
@@ -310,8 +321,51 @@ async function validateSchema() {
         : { hasStudentIdIdx, hasActivityIdIdx, hasSkillIdIdx }
     );
 
+    // --------------------------------------------------------------------------
+    // Check 16: Upgraded badges table columns exist
+    // --------------------------------------------------------------------------
+    const badgeColsRes = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'badges';
+    `);
+    const existingBadgeCols = new Set(badgeColsRes.rows.map((r) => r.column_name));
+    const missingBadgeCols = REQUIRED_BADGE_COLUMNS.filter((col) => !existingBadgeCols.has(col));
+    const badgesColsPassed = missingBadgeCols.length === 0;
+
+    recordCheck(
+      16,
+      'All required Open Badges 3.0 columns exist on badges table',
+      badgesColsPassed,
+      badgesColsPassed
+        ? `All ${REQUIRED_BADGE_COLUMNS.length} badge columns verified`
+        : { missing: missingBadgeCols }
+    );
+
+    // --------------------------------------------------------------------------
+    // Check 17: Unique constraints on badges table exist
+    // --------------------------------------------------------------------------
+    const badgeConstraintsRes = await pool.query(`
+      SELECT conname 
+      FROM pg_constraint 
+      WHERE conrelid = 'badges'::regclass;
+    `);
+    const existingBadgeConstraints = new Set(badgeConstraintsRes.rows.map((r) => r.conname));
+    const hasCertUnique = existingBadgeConstraints.has('uq_badges_certificate_id');
+    const hasCredUnique = existingBadgeConstraints.has('uq_badges_credential_id');
+    const badgeConstraintsPassed = hasCertUnique && hasCredUnique;
+
+    recordCheck(
+      17,
+      'Required unique constraints on badges table exist',
+      badgeConstraintsPassed,
+      badgeConstraintsPassed
+        ? 'uq_badges_certificate_id and uq_badges_credential_id verified'
+        : { hasCertUnique, hasCredUnique }
+    );
+
     console.log('\n===============================================================');
-    console.log(`VALIDATION SUMMARY: [${allChecksPassed ? 'ALL 15 CHECKS PASSED' : 'SOME CHECKS FAILED'}]`);
+    console.log(`VALIDATION SUMMARY: [${allChecksPassed ? 'ALL 17 CHECKS PASSED' : 'SOME CHECKS FAILED'}]`);
     console.log('===============================================================');
 
     return { allChecksPassed, report };

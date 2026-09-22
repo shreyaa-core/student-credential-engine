@@ -48,12 +48,12 @@ function Dashboard() {
       const data = response.data || {};
 
       setDashboardData({
-        totalCertificates: data.totalCertificates ?? data.total_certificates ?? 0,
-        verifiedCertificates: data.verifiedCertificates ?? data.verified_certificates ?? 0,
-        pendingCertificates: data.pendingCertificates ?? data.pending_certificates ?? 0,
-        skillsEarned: data.skillsEarned ?? data.skills_earned ?? 0,
-        badgesEarned: data.badgesEarned ?? data.badges_earned ?? 0,
-        totalActivities: data.totalActivities ?? data.total_activities ?? 0,
+        totalCertificates: Number(data.totalCertificates ?? data.total_certificates ?? 0),
+        verifiedCertificates: Number(data.verifiedCertificates ?? data.verified_certificates ?? 0),
+        pendingCertificates: Number(data.pendingCertificates ?? data.pending_certificates ?? 0),
+        skillsEarned: Number(data.skillsEarned ?? data.skills_earned ?? 0),
+        badgesEarned: Number(data.badgesEarned ?? data.badges_earned ?? 0),
+        totalActivities: Number(data.totalActivities ?? data.total_activities ?? data.activitiesLogged ?? data.activities_logged ?? data.activities ?? 0),
         recentCertificates: Array.isArray(data.recentCertificates) ? data.recentCertificates : [],
         latestBadges: Array.isArray(data.latestBadges) ? data.latestBadges : [],
       });
@@ -77,7 +77,7 @@ function Dashboard() {
   const summaryMetrics = [
     {
       label: 'Total Certificates',
-      value: dashboardData.totalCertificates,
+      value: dashboardData.totalCertificates ?? 0,
       subtitle: 'Recorded in database',
       icon: '📜',
       bgColor: 'bg-blue-50',
@@ -86,7 +86,7 @@ function Dashboard() {
     },
     {
       label: 'Verified Certificates',
-      value: dashboardData.verifiedCertificates,
+      value: dashboardData.verifiedCertificates ?? 0,
       subtitle: 'Verified & authenticated',
       icon: '✅',
       bgColor: 'bg-emerald-50',
@@ -95,7 +95,7 @@ function Dashboard() {
     },
     {
       label: 'Pending Review',
-      value: dashboardData.pendingCertificates,
+      value: dashboardData.pendingCertificates ?? 0,
       subtitle: 'Awaiting admin review',
       icon: '⏳',
       bgColor: 'bg-amber-50',
@@ -104,7 +104,7 @@ function Dashboard() {
     },
     {
       label: 'Skills Earned',
-      value: dashboardData.skillsEarned,
+      value: dashboardData.skillsEarned ?? 0,
       subtitle: 'Verified competencies',
       icon: '⚡',
       bgColor: 'bg-purple-50',
@@ -113,7 +113,7 @@ function Dashboard() {
     },
     {
       label: 'Badges Earned',
-      value: dashboardData.badgesEarned,
+      value: dashboardData.badgesEarned ?? 0,
       subtitle: 'Digital milestones',
       icon: '🏅',
       bgColor: 'bg-indigo-50',
@@ -122,7 +122,7 @@ function Dashboard() {
     },
     {
       label: 'Activities Logged',
-      value: dashboardData.totalActivities,
+      value: dashboardData.totalActivities ?? 0,
       subtitle: 'Co-curricular records',
       icon: '🎯',
       bgColor: 'bg-teal-50',

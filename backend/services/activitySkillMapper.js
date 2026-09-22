@@ -21,7 +21,7 @@ const TAXONOMY_RULES = [
     skillName: 'JavaScript',
     patterns: [
       { regex: /\b(?:javascript|ecmascript)\b/i, confidence: 95 },
-      { regex: /\b(?:js|vanilla\s+js)\b/i, confidence: 80 }
+      { regex: /(?<!(?:node|react|vue|next)[\.\s_-]*)\b(?:js|vanilla\s+js)\b/i, confidence: 80 }
     ]
   },
   {

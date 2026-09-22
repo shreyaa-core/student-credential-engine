@@ -20,6 +20,7 @@ const skillRoutes = require('./routes/skillRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const verifyRoutes = require('./routes/verifyRoutes');
 const activityRoutes = require('./routes/activityRoutes');
+const transcriptRoutes = require('./routes/transcriptRoutes');
 
 // 3. Initialize Express application instance
 const app = express();
@@ -54,7 +55,8 @@ app.get('/', (req, res) => {
       createBadge: "POST /api/badges/create",
       adminCertificates: "GET /api/admin/certificates",
       updateCertificateStatus: "PUT /api/admin/certificates/:id/status",
-      activities: "GET /api/activities, POST /api/activities"
+      activities: "GET /api/activities, POST /api/activities",
+      transcript: "GET /api/transcript/me, GET /api/transcript/me/pdf"
     },
     frontendApp: "http://localhost:3000"
   });
@@ -109,6 +111,9 @@ app.use('/api/verify', verifyRoutes);
 
 // Mount Activity Logs Routes (handles CRUD /api/activities with skill taxonomy mapping)
 app.use('/api/activities', activityRoutes);
+
+// Mount Transcript Routes (handles GET /api/transcript/me and GET /api/transcript/me/pdf)
+app.use('/api/transcript', transcriptRoutes);
 
 // 7. Start listening for incoming network requests
 app.listen(PORT, () => {

@@ -26,6 +26,7 @@ router.get(['/', '/api/dashboard'], requireAuth, async (req, res) => {
     let pendingCertificates = 0;
     let skillsEarned = 0;
     let badgesEarned = 0;
+    let totalActivities = 0;
     let recentCertificates = [];
     let latestBadges = [];
 
@@ -84,7 +85,6 @@ router.get(['/', '/api/dashboard'], requireAuth, async (req, res) => {
       }
 
       // Fetch activities count for this user
-      let totalActivities = 0;
       const actCountRes = await pool.query(
         `SELECT COUNT(*)::int AS count FROM activity_logs WHERE student_id = $1;`,
         [studentId]
@@ -150,7 +150,7 @@ router.get(['/', '/api/dashboard'], requireAuth, async (req, res) => {
               id: `badge-${cert.id}`,
               certificate_id: cert.id,
               name: `${cert.certificate_name} Badge`,
-              issuer: cert.issuer || 'Credential Authority',
+              issuer: cert.issuer || 'Bitwave Credential Engine',
               criteria: criteriaText,
               imageUrl: '',
               icon: '🏅',
@@ -186,6 +186,8 @@ router.get(['/', '/api/dashboard'], requireAuth, async (req, res) => {
       badges_earned: badgesEarned,
       totalActivities,
       total_activities: totalActivities,
+      activitiesLogged: totalActivities,
+      activities_logged: totalActivities,
       recentCertificates,
       latestBadges,
     });

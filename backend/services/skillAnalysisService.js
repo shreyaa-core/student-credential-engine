@@ -25,7 +25,7 @@ const CONFIDENCE_THRESHOLD = 0.85;
 const TECHNICAL_PATTERNS = [
   // Taxonomy skills
   { name: 'Python', regex: /\bpython\b/i },
-  { name: 'JavaScript', regex: /\b(?:javascript|js)\b/i },
+  { name: 'JavaScript', regex: /(?:\b(?:javascript|ecmascript)\b|(?<!(?:node|react|vue|next)[\.\s_-]*)\bjs\b)/i },
   { name: 'React', regex: /\breact(?:\.js)?\b/i },
   { name: 'Node.js', regex: /\bnode(?:\.js)?\b/i },
   { name: 'SQL', regex: /\b(?:sql|postgresql|postgres|mysql|sqlite)\b/i },

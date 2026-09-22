@@ -106,12 +106,20 @@ CREATE TABLE IF NOT EXISTS verification_logs (
 CREATE TABLE IF NOT EXISTS badges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-    certificate_id UUID REFERENCES certificates(id) ON DELETE SET NULL,
+    certificate_id UUID REFERENCES certificates(id) ON DELETE CASCADE,
+    credential_id VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
-    image_url TEXT NOT NULL,
+    image_url TEXT,
     criteria TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    credential_json JSONB NOT NULL,
+    issued_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_badges_certificate_id UNIQUE (certificate_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_badges_credential_id ON badges(credential_id);
+CREATE INDEX IF NOT EXISTS idx_badges_student_id ON badges(student_id);
+CREATE INDEX IF NOT EXISTS idx_badges_certificate_id ON badges(certificate_id);
 
 -- ------------------------------------------------------------------------------
 -- 7. ACTIVITY_LOGS

@@ -1,0 +1,1026 @@
+{
+  "summary": {
+    "test_run_at": "2026-09-22T05:38:45.514Z",
+    "total_cases": 20,
+    "passed_cases": 20,
+    "overall_acceptance_rate": "20/20 (100.0%)",
+    "metrics": {
+      "parsing_accuracy_pct": 95,
+      "verification_accuracy_pct": 100,
+      "skill_exact_match_rate_pct": 100,
+      "skill_precision": 1,
+      "skill_recall": 1,
+      "skill_f1_score": 1,
+      "forged_verified_count": 0,
+      "critical_rule_forged_verified_zero": true,
+      "confusion_matrix": {
+        "true_positives": 8,
+        "false_positives": 0,
+        "true_negatives": 12,
+        "false_negatives": 0
+      }
+    },
+    "integration_checks": {
+      "badge_issued_for_valid": 8,
+      "badge_blocked_for_invalid": 12,
+      "transcript_included_for_valid": 8,
+      "transcript_excluded_for_invalid": 12
+    },
+    "database_integrity": {
+      "baseline_counts": {
+        "profiles": "3",
+        "certificates": "2",
+        "certificate_skills": "2",
+        "badges": "0",
+        "verification_logs": "7",
+        "skills": "7",
+        "activity_logs": "1",
+        "activity_skills": "0"
+      },
+      "final_counts": {
+        "profiles": "3",
+        "certificates": "2",
+        "certificate_skills": "2",
+        "badges": "0",
+        "verification_logs": "7",
+        "skills": "7",
+        "activity_logs": "1",
+        "activity_skills": "0"
+      },
+      "zero_residual_data": true
+    },
+    "total_duration_ms": 11976
+  },
+  "cases": [
+    {
+      "case_id": "CASE-01",
+      "category": "VALID",
+      "filename": "cert-01-nptel-python.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 393,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Programming, Data Structures and Algorithms Using Python",
+        "issuer": "NPTEL",
+        "certificate_id": "NPTEL24CS101S1234567",
+        "issue_date": "2024-10-25",
+        "verification_url": "https://archive.nptel.ac.in/noc/E_Certificate/verify?certId=NPTEL24CS101S1234567"
+      },
+      "skills": {
+        "expected": [
+          "Python"
+        ],
+        "mapped": [
+          "Python"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFIED",
+        "actual_status": "VERIFIED",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Authoritative NPTEL credential evidence matched submitted certificate."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": true,
+        "badge_proof_verified": true,
+        "transcript_included": true
+      },
+      "case_passed": true,
+      "duration_ms": 1114
+    },
+    {
+      "case_id": "CASE-02",
+      "category": "VALID",
+      "filename": "cert-02-coursera-ml.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 365,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Machine Learning Specialization",
+        "issuer": "Coursera",
+        "certificate_id": "COURSERA-ML-987654",
+        "issue_date": "2024-11-15",
+        "verification_url": "https://www.coursera.org/verify/COURSERA-ML-987654"
+      },
+      "skills": {
+        "expected": [
+          "Machine Learning"
+        ],
+        "mapped": [
+          "Machine Learning"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFIED",
+        "actual_status": "VERIFIED",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Authoritative Coursera accomplishment evidence matched submitted certificate."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": true,
+        "badge_proof_verified": true,
+        "transcript_included": true
+      },
+      "case_passed": true,
+      "duration_ms": 662
+    },
+    {
+      "case_id": "CASE-03",
+      "category": "VALID",
+      "filename": "cert-03-coursera-deeplearning.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 351,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Deep Learning and Neural Networks",
+        "issuer": "Coursera",
+        "certificate_id": "COURSERA-DL-543210",
+        "issue_date": "2024-12-01",
+        "verification_url": "https://www.coursera.org/verify/COURSERA-DL-543210"
+      },
+      "skills": {
+        "expected": [
+          "Deep Learning"
+        ],
+        "mapped": [
+          "Deep Learning"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFIED",
+        "actual_status": "VERIFIED",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Authoritative Coursera accomplishment evidence matched submitted certificate."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": true,
+        "badge_proof_verified": true,
+        "transcript_included": true
+      },
+      "case_passed": true,
+      "duration_ms": 485
+    },
+    {
+      "case_id": "CASE-04",
+      "category": "VALID",
+      "filename": "cert-04-edx-sql.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 388,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Querying Data",
+        "issuer": "edX",
+        "certificate_id": "e0d1f2a3b4c56789e0d1f2a3b4c56789",
+        "issue_date": "2025-01-20",
+        "verification_url": "https://verify.edx.org/cert/e0d1f2a3b4c56789e0d1f2a3b4c56789"
+      },
+      "skills": {
+        "expected": [
+          "SQL"
+        ],
+        "mapped": [
+          "SQL"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFIED",
+        "actual_status": "VERIFIED",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Authoritative edX credential evidence matched submitted certificate."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": true,
+        "badge_proof_verified": true,
+        "transcript_included": true
+      },
+      "case_passed": true,
+      "duration_ms": 534
+    },
+    {
+      "case_id": "CASE-05",
+      "category": "VALID",
+      "filename": "cert-05-credly-react.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 413,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Certified Frontend Specialist in React and Web Development",
+        "issuer": "Credly",
+        "certificate_id": "11223344-5566-7788-9900-aabbccddeeff",
+        "issue_date": "2025-02-14",
+        "verification_url": "https://www.credly.com/badges/11223344-5566-7788-9900-aabbccddeeff"
+      },
+      "skills": {
+        "expected": [
+          "React"
+        ],
+        "mapped": [
+          "React"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFIED",
+        "actual_status": "VERIFIED",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Authoritative Credly digital badge evidence matched submitted certificate."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": true,
+        "badge_proof_verified": true,
+        "transcript_included": true
+      },
+      "case_passed": true,
+      "duration_ms": 557
+    },
+    {
+      "case_id": "CASE-06",
+      "category": "VALID",
+      "filename": "cert-06-accredible-nodejs.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 376,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Backend Engineering",
+        "issuer": "Accredible",
+        "certificate_id": "accredible-node-99887766",
+        "issue_date": "2025-03-10",
+        "verification_url": "https://www.credential.net/accredible-node-99887766"
+      },
+      "skills": {
+        "expected": [
+          "Node.js"
+        ],
+        "mapped": [
+          "Node.js"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFIED",
+        "actual_status": "VERIFIED",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Authoritative Accredible credential evidence matched submitted certificate."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": true,
+        "badge_proof_verified": true,
+        "transcript_included": true
+      },
+      "case_passed": true,
+      "duration_ms": 661
+    },
+    {
+      "case_id": "CASE-07",
+      "category": "VALID",
+      "filename": "cert-07-coursera-javascript.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 354,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "JavaScript Modern Web Applications",
+        "issuer": "Coursera",
+        "certificate_id": "COURSERA-JS-778899",
+        "issue_date": "2025-04-05",
+        "verification_url": "https://www.coursera.org/verify/COURSERA-JS-778899"
+      },
+      "skills": {
+        "expected": [
+          "JavaScript"
+        ],
+        "mapped": [
+          "JavaScript"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFIED",
+        "actual_status": "VERIFIED",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Authoritative Coursera accomplishment evidence matched submitted certificate."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": true,
+        "badge_proof_verified": true,
+        "transcript_included": true
+      },
+      "case_passed": true,
+      "duration_ms": 504
+    },
+    {
+      "case_id": "CASE-08",
+      "category": "VALID",
+      "filename": "cert-08-nptel-ml-python.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 397,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Python for Data Science and Machine Learning",
+        "issuer": "NPTEL",
+        "certificate_id": "NPTEL25CS202S9876543",
+        "issue_date": "2025-05-18",
+        "verification_url": "https://archive.nptel.ac.in/noc/E_Certificate/verify?certId=NPTEL25CS202S9876543"
+      },
+      "skills": {
+        "expected": [
+          "Python",
+          "Machine Learning"
+        ],
+        "mapped": [
+          "Python",
+          "Machine Learning"
+        ],
+        "exact_match": true,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFIED",
+        "actual_status": "VERIFIED",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Authoritative NPTEL credential evidence matched submitted certificate."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": true,
+        "badge_proof_verified": true,
+        "transcript_included": true
+      },
+      "case_passed": true,
+      "duration_ms": 446
+    },
+    {
+      "case_id": "CASE-09",
+      "category": "FORGED",
+      "filename": "cert-09-forged-typosquatting.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 338,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Machine Learning Mastery",
+        "issuer": "Coursera",
+        "certificate_id": "COURSERA-FAKE-001",
+        "issue_date": "2025-05-01",
+        "verification_url": "https://coursera.org.attacker-phish.com/verify/COURSERA-FAKE-001"
+      },
+      "skills": {
+        "expected": [
+          "Machine Learning"
+        ],
+        "mapped": [
+          "Machine Learning"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "SUSPICIOUS",
+        "actual_status": "SUSPICIOUS",
+        "status_match": true,
+        "mode": "OFFLINE",
+        "reason": "Domain \"coursera.org.attacker-phish.com\" is not an authorized verification domain for Coursera."
+      },
+      "security": {
+        "forged_prevented": true,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 406
+    },
+    {
+      "case_id": "CASE-10",
+      "category": "FORGED",
+      "filename": "cert-10-forged-altered-id.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 354,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Full-Stack Web Development",
+        "issuer": "edX",
+        "certificate_id": "ffff0000aaaa1111bbbb2222cccc3333",
+        "issue_date": "2025-05-05",
+        "verification_url": "https://verify.edx.org/cert/ffff0000aaaa1111bbbb2222cccc3333"
+      },
+      "skills": {
+        "expected": [
+          "React"
+        ],
+        "mapped": [
+          "React"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "SUSPICIOUS",
+        "actual_status": "SUSPICIOUS",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "edX portal reported credential not found (\"certificate not found\")."
+      },
+      "security": {
+        "forged_prevented": true,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 454
+    },
+    {
+      "case_id": "CASE-11",
+      "category": "FORGED",
+      "filename": "cert-11-forged-nptel-revoked.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 369,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Deep Learning Fundamentals",
+        "issuer": "NPTEL",
+        "certificate_id": "NPTEL-REVOKED-0000000",
+        "issue_date": "2025-05-10",
+        "verification_url": "https://archive.nptel.ac.in/noc/E_Certificate/verify?certId=NPTEL-REVOKED-0000000"
+      },
+      "skills": {
+        "expected": [
+          "Deep Learning"
+        ],
+        "mapped": [
+          "Deep Learning"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "SUSPICIOUS",
+        "actual_status": "SUSPICIOUS",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "NPTEL verification portal explicitly reported credential not found (\"no certificate found\")."
+      },
+      "security": {
+        "forged_prevented": true,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 450
+    },
+    {
+      "case_id": "CASE-12",
+      "category": "FORGED",
+      "filename": "cert-12-forged-ssrf-metadata.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 313,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "SQL Database Administration",
+        "issuer": "Credly",
+        "certificate_id": "credly-ssrf-attack-001",
+        "issue_date": "2025-05-12",
+        "verification_url": "http://169.254.169.254/latest/meta-data/"
+      },
+      "skills": {
+        "expected": [
+          "SQL"
+        ],
+        "mapped": [
+          "SQL"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "SUSPICIOUS",
+        "actual_status": "SUSPICIOUS",
+        "status_match": true,
+        "mode": "OFFLINE",
+        "reason": "Insecure protocol \"http:\". HTTPS is strictly required."
+      },
+      "security": {
+        "forged_prevented": true,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 453
+    },
+    {
+      "case_id": "CASE-13",
+      "category": "MANUAL_REVIEW",
+      "filename": "cert-13-unsupported-issuer.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 346,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Advanced JavaScript Frameworks",
+        "issuer": "Autonomous Technical Institute",
+        "certificate_id": "ATI-JS-2025-555",
+        "issue_date": "2025-05-15",
+        "verification_url": "https://autonomous-institute.edu/verify/555"
+      },
+      "skills": {
+        "expected": [
+          "JavaScript"
+        ],
+        "mapped": [
+          "JavaScript"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "MANUAL_REVIEW",
+        "actual_status": "MANUAL_REVIEW",
+        "status_match": true,
+        "mode": "OFFLINE",
+        "reason": "Issuer \"Autonomous Technical Institute\" is not configured in the trusted registry."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 361
+    },
+    {
+      "case_id": "CASE-14",
+      "category": "MANUAL_REVIEW",
+      "filename": "cert-14-missing-verification-url.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 302,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Executive Leadership Seminar",
+        "issuer": "Global Leadership Institute",
+        "certificate_id": "GLI-LEAD-2026-10294",
+        "issue_date": "2026-02-10",
+        "verification_url": null
+      },
+      "skills": {
+        "expected": [],
+        "mapped": [],
+        "exact_match": true,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "MANUAL_REVIEW",
+        "actual_status": "MANUAL_REVIEW",
+        "status_match": true,
+        "mode": "OFFLINE",
+        "reason": "Certificate has no public verification URL. Queued for manual verification."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 474
+    },
+    {
+      "case_id": "CASE-15",
+      "category": "MANUAL_REVIEW",
+      "filename": "cert-15-timeout-unreachable.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 362,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Cloud Database Architecture",
+        "issuer": "Coursera",
+        "certificate_id": "COURSERA-TIMEOUT-999",
+        "issue_date": "2025-05-20",
+        "verification_url": "https://www.coursera.org/verify/COURSERA-TIMEOUT-999"
+      },
+      "skills": {
+        "expected": [
+          "SQL"
+        ],
+        "mapped": [
+          "SQL"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "VERIFICATION_TIMEOUT",
+        "actual_status": "VERIFICATION_TIMEOUT",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Issuer verification request timed out."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 527
+    },
+    {
+      "case_id": "CASE-16",
+      "category": "MANUAL_REVIEW",
+      "filename": "cert-16-no-evidence-http200.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "pdf_parse",
+        "ocr_used": false,
+        "text_length": 334,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Python Advanced Data Structures",
+        "issuer": "NPTEL",
+        "certificate_id": "NPTEL-NO-EVIDENCE-404",
+        "issue_date": "2025-05-25",
+        "verification_url": "https://archive.nptel.ac.in/noc/E_Certificate/verify"
+      },
+      "skills": {
+        "expected": [
+          "Python"
+        ],
+        "mapped": [
+          "Python"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "MANUAL_REVIEW",
+        "actual_status": "MANUAL_REVIEW",
+        "status_match": true,
+        "mode": "MOCKED_ISSUER",
+        "reason": "Official NPTEL portal reached, but certificate identifier could not be conclusively matched."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 436
+    },
+    {
+      "case_id": "CASE-17",
+      "category": "OCR_SCANNED",
+      "filename": "cert-17-scanned-ocr.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "tesseract_ocr",
+        "ocr_used": true,
+        "text_length": 270,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Zero to Python Hero: Code Smart",
+        "issuer": "LetsUpgrade",
+        "certificate_id": "LU-PY-2025-0814",
+        "issue_date": "2025-06-23",
+        "verification_url": null
+      },
+      "skills": {
+        "expected": [
+          "Python"
+        ],
+        "mapped": [
+          "Python"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "MANUAL_REVIEW",
+        "actual_status": "MANUAL_REVIEW",
+        "status_match": true,
+        "mode": "OFFLINE",
+        "reason": "Certificate has no public verification URL. Queued for manual verification."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 1492
+    },
+    {
+      "case_id": "CASE-18",
+      "category": "OCR_SCANNED",
+      "filename": "cert-18-image-ocr.png",
+      "file_type": "PNG",
+      "parsing": {
+        "method": "tesseract_ocr",
+        "ocr_used": true,
+        "text_length": 270,
+        "success": true
+      },
+      "extraction": {
+        "course_name": "Zero to Python Hero: Code Smart",
+        "issuer": "LetsUpgrade",
+        "certificate_id": "LU-PY-2025-0814",
+        "issue_date": "2025-06-23",
+        "verification_url": null
+      },
+      "skills": {
+        "expected": [
+          "Python"
+        ],
+        "mapped": [
+          "Python"
+        ],
+        "exact_match": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "MANUAL_REVIEW",
+        "actual_status": "MANUAL_REVIEW",
+        "status_match": true,
+        "mode": "OFFLINE",
+        "reason": "Certificate has no public verification URL. Queued for manual verification."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 1097
+    },
+    {
+      "case_id": "CASE-19",
+      "category": "EDGE_CASE",
+      "filename": "cert-19-empty-corrupt.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "failed",
+        "ocr_used": true,
+        "text_length": 0,
+        "success": false
+      },
+      "extraction": {
+        "course_name": null,
+        "issuer": null,
+        "certificate_id": null,
+        "issue_date": null,
+        "verification_url": null
+      },
+      "skills": {
+        "expected": [],
+        "mapped": [],
+        "exact_match": true,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "MANUAL_REVIEW",
+        "actual_status": "MANUAL_REVIEW",
+        "status_match": true,
+        "mode": "OFFLINE",
+        "reason": "Certificate has no public verification URL. Queued for manual verification."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 13
+    },
+    {
+      "case_id": "CASE-20",
+      "category": "EDGE_CASE",
+      "filename": "cert-20-incomplete-metadata.pdf",
+      "file_type": "PDF",
+      "parsing": {
+        "method": "tesseract_ocr",
+        "ocr_used": true,
+        "text_length": 25,
+        "success": true
+      },
+      "extraction": {
+        "course_name": null,
+        "issuer": null,
+        "certificate_id": null,
+        "issue_date": null,
+        "verification_url": null
+      },
+      "skills": {
+        "expected": [],
+        "mapped": [],
+        "exact_match": true,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "verification": {
+        "expected_status": "MANUAL_REVIEW",
+        "actual_status": "MANUAL_REVIEW",
+        "status_match": true,
+        "mode": "OFFLINE",
+        "reason": "Certificate has no public verification URL. Queued for manual verification."
+      },
+      "security": {
+        "forged_prevented": null,
+        "duplicate_prevented": true
+      },
+      "integration": {
+        "badge_issued": false,
+        "badge_proof_verified": false,
+        "transcript_included": false
+      },
+      "case_passed": true,
+      "duration_ms": 836
+    }
+  ]
+}

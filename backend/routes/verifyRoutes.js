@@ -121,8 +121,20 @@ async function handleVerificationLookup(identifier, req, res) {
     let junctionSkillRows = [];
 
     try {
+      // 0. Query by badge credential_id or badge id if applicable
+      const badgeLookup = await pool.query(
+        'SELECT certificate_id FROM badges WHERE credential_id = $1 OR id::text = $1 LIMIT 1',
+        [rawQuery]
+      );
+      if (badgeLookup.rows.length > 0 && badgeLookup.rows[0].certificate_id) {
+        const bCertRes = await pool.query('SELECT * FROM certificates WHERE id = $1 LIMIT 1', [badgeLookup.rows[0].certificate_id]);
+        if (bCertRes.rows && bCertRes.rows.length > 0) {
+          cert = bCertRes.rows[0];
+        }
+      }
+
       // 1. Query certificate by exact UUID
-      if (isUUID) {
+      if (!cert && isUUID) {
         const certRes = await pool.query('SELECT * FROM certificates WHERE id = $1 LIMIT 1', [rawQuery]);
         if (certRes.rows && certRes.rows.length > 0) {
           cert = certRes.rows[0];

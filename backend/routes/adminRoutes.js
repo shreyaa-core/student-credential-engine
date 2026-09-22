@@ -175,6 +175,16 @@ router.put(['/certificates/:id/status', '/:id/status'], adminAuth, async (req, r
 
     const updatedCertificate = result.rows[0];
 
+    // Automated digital badge issuance for approved/verified certificates (Open Badges 3.0)
+    if ((canonicalStatus === 'APPROVED' || canonicalStatus === 'VERIFIED') && updatedCertificate?.id) {
+      try {
+        const { issueBadgeForCertificate } = require('../services/openBadgeService');
+        await issueBadgeForCertificate(updatedCertificate.id, null, pool);
+      } catch (badgeIssuanceErr) {
+        console.warn('Notice: Non-fatal automatic badge issuance on admin approval deferred:', badgeIssuanceErr.message);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Certificate status updated successfully',

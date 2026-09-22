@@ -359,6 +359,17 @@ async function uploadCertificate(req, res) {
 
       savedRecord.skills = (skillAnalysis.skills || []).map((s) => s.skillName);
       savedRecord.skillAnalysis = skillAnalysis;
+
+      // Automated digital badge issuance for verified certificates (Open Badges 3.0)
+      if (savedRecord.status === 'VERIFIED' && savedRecord.id) {
+        try {
+          const { issueBadgeForCertificate } = require('../services/openBadgeService');
+          const badgeResult = await issueBadgeForCertificate(savedRecord.id, student_id, pool);
+          savedRecord.badge = badgeResult.badge;
+        } catch (badgeIssuanceErr) {
+          console.warn('Notice: Non-fatal automatic badge issuance deferred:', badgeIssuanceErr.message);
+        }
+      }
     } catch (dbErr) {
       console.error('PostgreSQL certificates table insert error:', dbErr.message, 'Code:', dbErr.code);
       if (dbErr.code === '23505') {
