@@ -4,32 +4,27 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
 /**
- * Login Page Component
- * 
- * Interactive authentication interface for Issuers and Admins:
- * - Controlled Email and Password inputs
- * - Role selector (Issuer / Admin)
- * - Authenticates against /api/auth/login and stores JWT session
- * - Dynamic redirection based on role
+ * Login Page
+ *
+ * Simple email + password login. No role selector.
+ * The backend automatically returns role=Admin for admin@test.in
+ * and role=Issuer for all other accounts.
  */
 function Login() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const { login, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/portfolio', { replace: true });
-    }
+    if (isAuthenticated) navigate('/portfolio', { replace: true });
   }, [isAuthenticated, navigate]);
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email,        setEmail]        = useState('');
+  const [password,     setPassword]     = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState('Issuer');
   const [errorMessage, setErrorMessage] = useState(null);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess,    setIsSuccess]    = useState(false);
+  const [isLoading,    setIsLoading]    = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,34 +34,27 @@ function Login() {
       setErrorMessage('Please enter your email address.');
       return;
     }
-
     if (!password.trim()) {
       setErrorMessage('Please enter your password.');
-      return;
-    }
-
-    if (password.length < 4) {
-      setErrorMessage('Password must be at least 4 characters long.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Authenticate against Express backend
+      // No role field sent — backend derives role from the database
       const res = await axios.post('http://localhost:5000/api/auth/login', {
-        email: email.trim(),
+        email:    email.trim(),
         password: password.trim(),
-        role,
       });
 
       if (res.data?.success && res.data?.token) {
         login(res.data.user, res.data.token);
         setIsSuccess(true);
 
-        const targetRole = (res.data.user?.role || role).toLowerCase();
-        const fromPath = location.state?.from?.pathname;
-        const defaultPath = targetRole === 'admin' ? '/admin' : '/dashboard';
+        const returnedRole = (res.data.user?.role || '').toLowerCase();
+        const fromPath     = location.state?.from?.pathname;
+        const defaultPath  = returnedRole === 'admin' ? '/admin' : '/dashboard';
 
         setTimeout(() => {
           navigate(fromPath && !fromPath.includes('login') ? fromPath : defaultPath);
@@ -75,26 +63,23 @@ function Login() {
         throw new Error(res.data?.message || res.data?.error || 'Authentication failed');
       }
     } catch (err) {
-      console.warn('Backend login status:', err);
+      console.warn('Login error:', err);
       const serverErr =
         err.response?.data?.message ||
         err.response?.data?.error ||
-        (err.response?.status === 403
-          ? 'Selected role does not match the role assigned to this account.'
-          : err.message || 'Unable to connect to authentication server. Please ensure the backend is running.');
-
+        err.message ||
+        'Unable to connect to the server. Please ensure the backend is running.';
       setErrorMessage(serverErr);
       setIsLoading(false);
     }
   };
 
-  if (isAuthenticated) {
-    return null;
-  }
+  if (isAuthenticated) return null;
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center px-4 py-8">
       <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+
         {/* Header */}
         <div className="text-center mb-6">
           <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xl mx-auto mb-3 shadow-sm">
@@ -104,7 +89,7 @@ function Login() {
             Sign in to your account
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Access your issuer or administrative credentials
+            Micro-Credential &amp; Skill Verification Engine
           </p>
         </div>
 
@@ -120,36 +105,14 @@ function Login() {
         {isSuccess && (
           <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
             <span>✅</span>
-            <span>Signed in as {role}! Loading workspace...</span>
+            <span>Signed in! Loading your workspace...</span>
           </div>
         )}
 
-        {/* Role Selector Tabs */}
-        <div className="mb-4">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
-            Select Role
-          </label>
-          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
-            {['Issuer', 'Admin'].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  role === r
-                    ? 'bg-white text-indigo-600 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {r === 'Issuer' ? '🏛️ Issuer' : '🛡️ Admin'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Login Form */}
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email Field */}
+
+          {/* Email */}
           <div>
             <label
               htmlFor="email"
@@ -163,16 +126,13 @@ function Login() {
               required
               disabled={isLoading || isSuccess}
               value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setErrorMessage(null);
-              }}
+              onChange={(e) => { setEmail(e.target.value); setErrorMessage(null); }}
               placeholder="e.g. issuer@example.com"
               className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100"
             />
           </div>
 
-          {/* Password Field */}
+          {/* Password */}
           <div>
             <label
               htmlFor="password"
@@ -187,10 +147,7 @@ function Login() {
                 required
                 disabled={isLoading || isSuccess}
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setErrorMessage(null);
-                }}
+                onChange={(e) => { setPassword(e.target.value); setErrorMessage(null); }}
                 placeholder="••••••••"
                 className="w-full pl-4 pr-11 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100"
               />
@@ -199,7 +156,6 @@ function Login() {
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={isLoading || isSuccess}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                title={showPassword ? 'Hide password' : 'Show password'}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer transition-colors disabled:opacity-50"
               >
                 {showPassword ? (
@@ -216,7 +172,7 @@ function Login() {
             </div>
           </div>
 
-          {/* Login Button */}
+          {/* Submit */}
           <div className="pt-2">
             <button
               type="submit"
@@ -225,38 +181,22 @@ function Login() {
             >
               {isLoading ? (
                 <>
-                  <svg
-                    className="animate-spin h-4 w-4 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
+                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   <span>Signing in...</span>
                 </>
               ) : (
-                <span>Sign in as {role}</span>
+                <span>Sign In</span>
               )}
             </button>
           </div>
         </form>
 
-        {/* Footer Link */}
+        {/* Footer */}
         <div className="text-center mt-6 text-xs text-slate-500">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link to="/register" className="text-indigo-600 font-semibold hover:underline">
             Register here
           </Link>

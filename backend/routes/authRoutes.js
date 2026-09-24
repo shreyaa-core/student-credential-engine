@@ -1,5 +1,5 @@
 // ==============================================================================
-// Student Micro-Credential Verification Engine - Authentication Routes (Local JWT + PostgreSQL)
+// Student Micro-Credential Verification Engine - Authentication Routes
 // ==============================================================================
 
 const express = require('express');
@@ -10,30 +10,10 @@ const { generateToken, requireAuth } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-/**
- * Normalizes role string to standard format ('Issuer', 'Admin').
- * Rejects invalid roles (returns null).
- */
-function normalizeRole(roleInput) {
-  const r = (roleInput || '').trim().toLowerCase();
-  if (r === 'admin') {
-    return 'Admin';
-  }
-  if (r === 'issuer') {
-    return 'Issuer';
-  }
-  return null;
-}
-
-/**
- * Normalizes role for profiles table DB check constraint ('issuer', 'admin').
- * Defaults to 'issuer' for safe non-admin fallback.
- */
-function toDbRole(role) {
-  const r = (role || '').trim().toLowerCase();
-  if (r === 'admin') return 'admin';
-  return 'issuer';
-}
+// ── Canonical admin email ──────────────────────────────────────────────────────
+// This is the ONE pre-seeded admin account. It cannot be created through public
+// signup and its email is reserved — no other user may register with this address.
+const CANONICAL_ADMIN_EMAIL = 'admin@test.in';
 
 const dns = require('dns').promises;
 
@@ -66,91 +46,61 @@ function validatePassword(password) {
 
 /**
  * Verifies that the email domain has valid MX or fallback A DNS records.
- * Note: Verifies domain capability to receive email, does not prove individual mailbox.
  */
 async function verifyEmailDomain(domain) {
   try {
     const mxRecords = await dns.resolveMx(domain);
-    if (Array.isArray(mxRecords) && mxRecords.length > 0) {
-      return true;
-    }
-  } catch (mxErr) {
-    // If no MX records found, check for A record fallback per RFC 5321
+    if (Array.isArray(mxRecords) && mxRecords.length > 0) return true;
+  } catch {
     try {
       const aRecords = await dns.resolve4(domain);
-      if (Array.isArray(aRecords) && aRecords.length > 0) {
-        return true;
-      }
-    } catch (aErr) {
+      if (Array.isArray(aRecords) && aRecords.length > 0) return true;
+    } catch {
       return false;
     }
   }
   return false;
 }
 
-/**
- * GET /api/auth/register
- * 
- * Friendly response for web browser inspection
- */
+// ==============================================================================
+// GET /api/auth/register — browser-friendly info
+// ==============================================================================
 router.get(['/register', '/api/auth/register'], (req, res) => {
   return res.status(200).json({
-    message: "Registration endpoint is active. Send an HTTP POST request to create an account.",
-    method: "POST",
-    endpoint: "/api/auth/register",
-    requiredFields: {
-      name: "Full Name",
-      email: "issuer@example.com",
-      password: "securePassword123",
-      role: "Issuer | Admin",
-      institution: "Institution / Organization"
-    },
-    frontendApp: "http://localhost:3000/register"
+    message: 'Registration endpoint is active. Send an HTTP POST request to create an account.',
+    method: 'POST',
+    endpoint: '/api/auth/register',
+    requiredFields: { name: 'Full Name', email: 'you@example.com', password: 'SecurePass@1' },
+    note: 'Only Issuer accounts are created through public signup. Admin access is pre-configured.',
   });
 });
 
-/**
- * POST /api/auth/register
- * 
- * Secure user registration:
- * 1. Validate required fields
- * 2. Normalize email to lowercase
- * 3. Validate email syntax format
- * 4. Verify domain MX / fallback A records via Node.js dns.promises
- * 5. Check duplicate email in PostgreSQL profiles table
- * 6. Validate password strength (min 8 chars, uppercase, lowercase, number, special char)
- * 7. Hash password via bcrypt
- * 8. Insert into PostgreSQL profiles table
- * 9. Issue session JWT (no email sending, no verification tokens)
- */
+// ==============================================================================
+// POST /api/auth/register
+//
+// Creates a new Issuer account. Rules enforced at the backend:
+//  1. admin@test.in is a reserved email — cannot be registered here.
+//  2. Any role=admin in the request body is rejected (403).
+//  3. All successful registrations are locked to role=issuer regardless of
+//     what the client sends.
+// ==============================================================================
 router.post(['/register', '/api/auth/register'], async (req, res) => {
   try {
     const { name, fullName, email, password, role, institution } = req.body;
 
-    // 1. Validate required fields
+    // 1. Required fields
     const chosenName = (name || fullName || '').trim();
     if (!chosenName) {
-      return res.status(400).json({
-        success: false,
-        error: 'Full name is required.',
-      });
+      return res.status(400).json({ success: false, error: 'Full name is required.' });
     }
-
     if (!email || !email.trim()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email address is required.',
-      });
+      return res.status(400).json({ success: false, error: 'Email address is required.' });
     }
-
     if (!password || !password.trim()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Password is required.',
-      });
+      return res.status(400).json({ success: false, error: 'Password is required.' });
     }
 
-    // 2. Normalize email to lowercase
+    // 2. Normalize email
     const cleanEmail = email.trim().toLowerCase();
 
     // 3. Validate email syntax
@@ -162,22 +112,37 @@ router.post(['/register', '/api/auth/register'], async (req, res) => {
       });
     }
 
-    // 4. Validate email domain via DNS MX and fallback A records
+    // 4. Block the reserved admin email from being registered
+    if (cleanEmail === CANONICAL_ADMIN_EMAIL) {
+      return res.status(403).json({
+        success: false,
+        error: 'This email address is reserved and cannot be used for registration.',
+      });
+    }
+
+    // 5. Block any attempt to request role=admin (case-insensitive)
+    if ((role || '').trim().toLowerCase() === 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin accounts cannot be created through public registration.',
+      });
+    }
+
+    // 6. Validate email domain via DNS
     const domain = cleanEmail.split('@')[1];
     const isDomainValid = await verifyEmailDomain(domain);
     if (!isDomainValid) {
       return res.status(400).json({
         success: false,
-        error: `The email domain "${domain}" could not be resolved or does not have valid mail server records. Please enter a valid email address.`,
+        error: `The email domain "${domain}" could not be resolved. Please enter a valid email address.`,
       });
     }
 
-    // 5. Check duplicate email in PostgreSQL
+    // 7. Check duplicate email
     const existing = await pool.query(
       'SELECT id FROM profiles WHERE LOWER(email) = LOWER($1) LIMIT 1',
       [cleanEmail]
     );
-
     if (existing.rows.length > 0) {
       return res.status(400).json({
         success: false,
@@ -185,60 +150,33 @@ router.post(['/register', '/api/auth/register'], async (req, res) => {
       });
     }
 
-    // 6. Validate password complexity
+    // 8. Validate password complexity
     const passwordError = validatePassword(password);
     if (passwordError) {
-      return res.status(400).json({
-        success: false,
-        error: passwordError,
-      });
+      return res.status(400).json({ success: false, error: passwordError });
     }
 
-    // Role validation: Only 'Issuer' and 'Admin' are permitted
-    const requestedRole = (role || 'Issuer').trim();
-    const resolvedRole = normalizeRole(requestedRole);
-    if (!resolvedRole) {
-      return res.status(400).json({
-        success: false,
-        error: `Invalid role "${role}". Allowed roles are: Issuer, Admin.`,
-      });
-    }
+    // 9. Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    const dbRole = toDbRole(resolvedRole);
-
-    // 7. Hash password with bcrypt
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
-
-    // 8. Insert new user into PostgreSQL profiles table (without removed columns)
+    // 10. Insert — all public registrations are Issuer, regardless of any role field sent
     const userId = uuidv4();
-    const insertQuery = `
-      INSERT INTO profiles (id, full_name, email, password_hash, role, institution, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      RETURNING id, full_name, email, role, institution, created_at;
-    `;
-
-    const result = await pool.query(insertQuery, [
-      userId,
-      chosenName,
-      cleanEmail,
-      passwordHash,
-      dbRole,
-      institution ? institution.trim() : null,
-    ]);
+    const result = await pool.query(
+      `INSERT INTO profiles (id, full_name, email, password_hash, role, institution, created_at)
+       VALUES ($1, $2, $3, $4, 'issuer', $5, NOW())
+       RETURNING id, full_name, email, role, institution`,
+      [userId, chosenName, cleanEmail, passwordHash, institution ? institution.trim() : null]
+    );
 
     const newUser = result.rows[0];
-
-    // Construct user payload - NEVER return password_hash
     const userPayload = {
       id: newUser.id,
       email: newUser.email,
       name: newUser.full_name,
-      role: resolvedRole,
+      role: 'Issuer',
       institution: newUser.institution,
     };
 
-    // Generate JWT session token
     const token = generateToken(userPayload, '7d');
 
     return res.status(201).json({
@@ -256,35 +194,30 @@ router.post(['/register', '/api/auth/register'], async (req, res) => {
   }
 });
 
-/**
- * GET /api/auth/login
- * 
- * Friendly response for web browser inspection
- */
+// ==============================================================================
+// GET /api/auth/login — browser-friendly info
+// ==============================================================================
 router.get(['/login', '/api/auth/login'], (req, res) => {
   return res.status(200).json({
-    message: "Login endpoint is active. Send an HTTP POST request with credentials to log in.",
-    method: "POST",
-    endpoint: "/api/auth/login",
-    requiredFields: {
-      email: "issuer@example.com",
-      password: "yourPassword"
-    },
-    frontendApp: "http://localhost:3000/login"
+    message: 'Login endpoint is active. Send an HTTP POST request with credentials to log in.',
+    method: 'POST',
+    endpoint: '/api/auth/login',
+    requiredFields: { email: 'you@example.com', password: 'yourPassword' },
+    note: 'Role is automatically determined from the database. No role field is required.',
   });
 });
 
-/**
- * POST /api/auth/login
- * 
- * Native email/password login:
- * 1. Finds user in PostgreSQL 'profiles' table by email
- * 2. Verifies password against bcrypt hash
- * 3. Issues signed JWT session token
- */
+// ==============================================================================
+// POST /api/auth/login
+//
+// Simplified login — no role parameter required or accepted.
+// Role is read exclusively from PostgreSQL.
+//   admin@test.in → role = 'Admin'
+//   any other account → role = 'Issuer'
+// ==============================================================================
 router.post(['/login', '/api/auth/login'], async (req, res) => {
   try {
-    const { email, password, role } = req.body;
+    const { email, password } = req.body;
 
     if (!email || !email.trim()) {
       return res.status(400).json({
@@ -293,7 +226,6 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
         message: 'Email address is required.',
       });
     }
-
     if (!password || !password.trim()) {
       return res.status(400).json({
         success: false,
@@ -304,7 +236,7 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. Fetch user from PostgreSQL profiles table
+    // 1. Fetch user from PostgreSQL
     const result = await pool.query(
       'SELECT id, full_name, email, password_hash, role, institution FROM profiles WHERE LOWER(email) = LOWER($1) LIMIT 1',
       [cleanEmail]
@@ -320,7 +252,7 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
 
     const userRow = result.rows[0];
 
-    // 2. Verify password with bcrypt
+    // 2. Verify password
     const isPasswordValid = await bcrypt.compare(password, userRow.password_hash);
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -330,24 +262,11 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
       });
     }
 
-    // 3. Read the authoritative role strictly from the PostgreSQL database record
+    // 3. Derive authoritative role from database only — client cannot influence this
     const dbRoleRaw = (userRow.role || 'issuer').trim().toLowerCase();
     const authoritativeRole = dbRoleRaw === 'admin' ? 'Admin' : 'Issuer';
 
-    // 4. Role mismatch validation:
-    // The role selected on the login page MUST NEVER elevate or change the user's actual role.
-    if (role) {
-      const selectedRole = normalizeRole(role);
-      if (!selectedRole || selectedRole !== authoritativeRole) {
-        return res.status(403).json({
-          success: false,
-          message: 'Selected role does not match the role assigned to this account.',
-          error: 'Selected role does not match the role assigned to this account.',
-        });
-      }
-    }
-
-    // 5. Construct user payload strictly using authoritative database role
+    // 4. Build payload (never return password_hash)
     const userPayload = {
       id: userRow.id,
       email: userRow.email,
@@ -356,7 +275,7 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
       institution: userRow.institution || null,
     };
 
-    // 6. Generate cryptographically signed JWT using ONLY the database role
+    // 5. Sign JWT
     const token = generateToken(userPayload, '7d');
 
     return res.status(200).json({
@@ -375,35 +294,18 @@ router.post(['/login', '/api/auth/login'], async (req, res) => {
   }
 });
 
-/**
- * POST /api/auth/logout
- * 
- * Stateless JWT logout endpoint.
- */
-router.post('/logout', async (req, res) => {
-  try {
-    return res.status(200).json({
-      success: true,
-      message: 'Logged out successfully',
-    });
-  } catch (err) {
-    return res.status(200).json({
-      success: true,
-      message: 'Logged out successfully',
-    });
-  }
+// ==============================================================================
+// POST /api/auth/logout — stateless JWT logout
+// ==============================================================================
+router.post('/logout', (req, res) => {
+  return res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
 
-/**
- * GET /api/auth/me
- * 
- * Returns currently authenticated user session from JWT.
- */
+// ==============================================================================
+// GET /api/auth/me — returns authenticated user from JWT
+// ==============================================================================
 router.get('/me', requireAuth, (req, res) => {
-  return res.status(200).json({
-    success: true,
-    user: req.user,
-  });
+  return res.status(200).json({ success: true, user: req.user });
 });
 
 module.exports = router;

@@ -6,10 +6,9 @@ import { useAuth } from '../context/AuthContext';
 /**
  * Register Page Component
  * 
- * Interactive registration interface for Issuers and Admins:
+ * Simple registration interface:
  * - Full Name, Email, Password, Confirm Password
- * - Role selection (Issuer / Admin)
- * - Directly creates account via backend and stores authenticated JWT session
+ * - Creates an account via backend (public accounts default to Issuer role)
  */
 function Register() {
   const navigate = useNavigate();
@@ -23,7 +22,6 @@ function Register() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('Issuer');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -90,7 +88,6 @@ function Register() {
         name: fullName.trim(),
         email: email.trim(),
         password: password.trim(),
-        role,
       });
 
       if (res.data?.success) {
@@ -161,28 +158,6 @@ function Register() {
           </div>
         )}
 
-        {/* Role Selector */}
-        <div className="mb-4">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
-            I am registering as:
-          </label>
-          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
-            {['Issuer', 'Admin'].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  role === r
-                    ? 'bg-white text-indigo-600 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {r === 'Issuer' ? '🏛️ Issuer' : '🛡️ Admin'}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">

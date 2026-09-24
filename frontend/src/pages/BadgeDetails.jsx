@@ -23,6 +23,7 @@ function BadgeDetails() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
 
   const fetchBadgeDetails = async () => {
     const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
@@ -322,18 +323,18 @@ function BadgeDetails() {
             </div>
           </div>
 
-          {/* Section: Open Badges 3.0 & Cryptographic Verification */}
+          {/* Section: Badge Verification */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-violet-50 text-violet-700 border border-violet-100 mb-1">
-                  <span>🔐</span> 1EdTech Open Badges 3.0 Standard
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 mb-1">
+                  <span>✓</span> Verified Digital Credential
                 </div>
                 <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                  CRYPTOGRAPHIC PROOF & PUBLIC VERIFICATION
+                  Verify this digital badge
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Signed with W3C DataIntegrityProof and Ed25519 canonical hashing (eddsa-rdfc-2022).
+                  Scan the QR code or use the verification buttons below to verify authenticity online.
                 </p>
               </div>
 
@@ -378,46 +379,20 @@ function BadgeDetails() {
                 </span>
               </div>
 
-              {/* Cryptographic Details */}
+              {/* Student-facing details: Credential ID & Public Verification Link */}
               <div className="md:col-span-2 space-y-3">
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Credential ID (UUID)
+                    Credential ID
                   </span>
                   <p className="text-xs font-mono font-bold text-slate-800 break-all mt-0.5 select-all">
                     {badgeRecord?.credential_id || 'Generating / Pending'}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                      Standard
-                    </span>
-                    <p className="text-xs font-bold text-indigo-700 mt-0.5">
-                      Open Badges 3.0
-                    </p>
-                    <span className="text-[10px] text-slate-400">
-                      W3C VC v2.0
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                      Cryptosuite
-                    </span>
-                    <p className="text-xs font-bold text-emerald-700 mt-0.5 font-mono">
-                      eddsa-rdfc-2022
-                    </p>
-                    <span className="text-[10px] text-slate-400">
-                      Ed25519 Multikey
-                    </span>
-                  </div>
-                </div>
-
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                    Public Verification URL
+                    Public Verification Link
                   </span>
                   {badgeRecord?.credential_id ? (
                     <Link
@@ -432,7 +407,109 @@ function BadgeDetails() {
                     </p>
                   )}
                 </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {badgeRecord?.credential_id && (
+                    <>
+                      <Link
+                        to={`/verify/badge/${badgeRecord.credential_id}`}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-xs font-semibold transition-colors"
+                      >
+                        <span>🔍</span> Verify Online
+                      </Link>
+                      <button
+                        onClick={handleDownloadJsonLd}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        <span>📄</span> Download Credential
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
+            </div>
+
+            {/* Collapsible Advanced Verification Details */}
+            <div className="border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedDetails(!showAdvancedDetails)}
+                className="w-full flex items-center justify-between p-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 font-mono">
+                    {showAdvancedDetails ? '▼' : '▶'}
+                  </span>
+                  <span className="text-xs font-bold text-slate-800">
+                    Advanced Verification Details
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">
+                    (Open Badges 3.0, W3C VC v2.0, cryptographic proof)
+                  </span>
+                </div>
+                <span className="text-[11px] font-semibold text-indigo-600">
+                  {showAdvancedDetails ? 'Hide details' : 'Show details'}
+                </span>
+              </button>
+
+              {showAdvancedDetails && (
+                <div className="mt-3 p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3 bg-white rounded-lg border border-slate-200/80">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                        Standard & Specification
+                      </span>
+                      <p className="text-xs font-bold text-indigo-700 mt-0.5">
+                        Open Badges 3.0
+                      </p>
+                      <span className="text-[10px] text-slate-500">
+                        W3C VC v2.0 (Verifiable Credentials)
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-lg border border-slate-200/80">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                        Cryptosuite & Key Type
+                      </span>
+                      <p className="text-xs font-bold text-emerald-700 mt-0.5 font-mono">
+                        eddsa-rdfc-2022
+                      </p>
+                      <span className="text-[10px] text-slate-500">
+                        Ed25519 Multikey Cryptographic Signature
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-lg border border-slate-200/80 space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Cryptographic Proof Information
+                    </span>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Signed with W3C <code className="text-xs bg-slate-100 px-1 py-0.5 rounded text-slate-800 font-mono">DataIntegrityProof</code> using canonical RDF dataset canonicalization (RDFC-1.0) and Ed25519 digital signature.
+                    </p>
+                    {badgeRecord?.credential_json?.proof && (
+                      <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] font-mono text-slate-600 space-y-0.5">
+                        <div>
+                          <span className="text-slate-400">proof.type:</span> {badgeRecord.credential_json.proof.type || 'DataIntegrityProof'}
+                        </div>
+                        <div>
+                          <span className="text-slate-400">proof.cryptosuite:</span> {badgeRecord.credential_json.proof.cryptosuite || 'eddsa-rdfc-2022'}
+                        </div>
+                        {badgeRecord.credential_json.proof.created && (
+                          <div>
+                            <span className="text-slate-400">proof.created:</span> {badgeRecord.credential_json.proof.created}
+                          </div>
+                        )}
+                        {badgeRecord.credential_json.proof.verificationMethod && (
+                          <div className="truncate">
+                            <span className="text-slate-400">proof.verificationMethod:</span> {badgeRecord.credential_json.proof.verificationMethod}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
