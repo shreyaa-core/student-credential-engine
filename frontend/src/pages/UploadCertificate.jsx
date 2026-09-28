@@ -24,6 +24,7 @@ function UploadCertificate() {
   const [certificateId, setCertificateId] = useState('');
   const [issueDate, setIssueDate] = useState('');
   const [verificationUrl, setVerificationUrl] = useState('');
+  const [purpose, setPurpose] = useState('');
   const [file, setFile] = useState(null);
 
   // Parsing and upload states
@@ -45,6 +46,7 @@ function UploadCertificate() {
       setCertificateId('');
       setIssueDate('');
       setVerificationUrl('');
+      setPurpose('');
     }
   };
 
@@ -60,13 +62,39 @@ function UploadCertificate() {
 
     try {
       const response = await parseCertificate(file);
-      if (response && response.success && response.data) {
-        const data = response.data;
-        setCertificateName(data.certificate_name || '');
-        setIssuer(data.issuer || '');
-        setCertificateId(data.certificate_id || '');
-        setIssueDate(data.issue_date || '');
-        setVerificationUrl(data.verification_url || '');
+      
+      // Resolve payload safely regardless of whether response is { success, data: { ... } } or nested axios response
+      let data = response;
+      if (response && typeof response === 'object') {
+        if (response.data && typeof response.data === 'object') {
+          if (response.data.data && typeof response.data.data === 'object') {
+            data = response.data.data;
+          } else {
+            data = response.data;
+          }
+        }
+      }
+
+      if (data && typeof data === 'object') {
+        const extracted = {
+          certificate_name: data.certificate_name || data.certificateName || data.courseName || data.course_name || '',
+          issuer: data.issuer || data.issuing_organization || data.institution || '',
+          certificate_id: data.certificate_id || data.certificateId || data.credential_id || data.credentialId || '',
+          issue_date: data.issue_date || data.issueDate || data.date || '',
+          verification_url: data.verification_url || data.verificationUrl || data.url || '',
+          purpose: data.purpose || data.description || '',
+        };
+
+        if (import.meta.env.DEV) {
+          console.log('[CertificateParseDebug] Auto-filled fields:', extracted);
+        }
+
+        setCertificateName(extracted.certificate_name);
+        setIssuer(extracted.issuer);
+        setCertificateId(extracted.certificate_id);
+        setIssueDate(extracted.issue_date);
+        setVerificationUrl(extracted.verification_url);
+        setPurpose(extracted.purpose);
         setIsParsed(true);
         setParseNotice('Please review the extracted certificate details before submitting.');
       } else {
@@ -93,6 +121,7 @@ function UploadCertificate() {
     setCertificateId('');
     setIssueDate('');
     setVerificationUrl('');
+    setPurpose('');
     setFile(null);
     setIsParsed(false);
     setParseNotice(null);
@@ -132,6 +161,7 @@ function UploadCertificate() {
         certificate_id: certificateId.trim(),
         issue_date: issueDate.trim(),
         verification_url: verificationUrl.trim(),
+        purpose: purpose.trim(),
         student_id: user?.id,
       };
 
@@ -681,6 +711,25 @@ function UploadCertificate() {
                   onChange={(e) => setVerificationUrl(e.target.value)}
                   placeholder="https://coursera.org/verify/..."
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100 text-xs font-mono"
+                />
+              </div>
+
+              {/* Purpose / Description Field */}
+              <div>
+                <label
+                  htmlFor="purpose"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1"
+                >
+                  Purpose / Description <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <textarea
+                  id="purpose"
+                  rows={2}
+                  disabled={isUploading}
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  placeholder="e.g. For successfully completing the online course..."
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-slate-100 resize-none"
                 />
               </div>
 

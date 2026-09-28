@@ -473,12 +473,6 @@ async function parseCertificateOnly(req, res) {
     let fileBuffer = null;
     if (uploadedFile.buffer) {
       fileBuffer = uploadedFile.buffer;
-      const uploadDir = path.join(__dirname, '../uploads');
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      tempFilePath = path.join(uploadDir, `parse-temp-${uuidv4()}${fileExt || '.pdf'}`);
-      fs.writeFileSync(tempFilePath, fileBuffer);
     } else if (uploadedFile.path) {
       tempFilePath = uploadedFile.path;
       if (fs.existsSync(tempFilePath)) {
@@ -501,17 +495,52 @@ async function parseCertificateOnly(req, res) {
     const extractedText = parseResult?.text || '';
     const extractedData = extractCertificateInfo(extractedText, studentProfile);
 
+    // If any critical field is null, invoke Gemini AI fallback
+    const hasNullFields =
+      !extractedData.certificate_name ||
+      !extractedData.issuer ||
+      !extractedData.certificate_id ||
+      !extractedData.issue_date ||
+      !extractedData.verification_url ||
+      !extractedData.purpose;
+
+    let aiData = null;
+    if (hasNullFields && extractedText.trim().length > 0) {
+      try {
+        const { extractMetadataWithGemini } = require('../services/aiCertificateExtractor');
+        aiData = await extractMetadataWithGemini(extractedText, fileBuffer, mimeType);
+      } catch (aiErr) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[CertificateParse] Gemini fallback failed:', aiErr.message);
+        }
+      }
+    }
+
+    const finalData = {
+      certificate_name: extractedData.certificate_name || aiData?.certificate_name || null,
+      issuer: extractedData.issuer || aiData?.issuer || null,
+      certificate_id: extractedData.certificate_id || aiData?.certificate_id || null,
+      issue_date: extractedData.issue_date || aiData?.issue_date || null,
+      verification_url: extractedData.verification_url || aiData?.verification_url || null,
+      purpose: extractedData.purpose || aiData?.purpose || null,
+    };
+
     const isPDF = (mimeType || '').toLowerCase().includes('pdf') || fileExt === '.pdf';
     const file_type = isPDF ? 'pdf' : 'image';
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[CertificateParseDebug] Backend final extracted fields:', finalData);
+    }
 
     return res.status(200).json({
       success: true,
       data: {
-        certificate_name: extractedData.certificate_name || null,
-        issuer: extractedData.issuer || null,
-        certificate_id: extractedData.certificate_id || null,
-        issue_date: extractedData.issue_date || null,
-        verification_url: extractedData.verification_url || null,
+        certificate_name: finalData.certificate_name,
+        issuer: finalData.issuer,
+        certificate_id: finalData.certificate_id,
+        issue_date: finalData.issue_date,
+        verification_url: finalData.verification_url,
+        purpose: finalData.purpose,
         file_type,
         raw_text: extractedText || '',
       },

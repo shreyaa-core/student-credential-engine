@@ -162,18 +162,258 @@ function nptelAdapter({ html, url, certificateId, certificateName, studentName, 
 }
 
 /**
+ * Helper to safely decode HTML entities and JSON escapes.
+ */
+function decodeHtmlEntities(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x2F;/g, '/')
+    .replace(/&nbsp;/g, ' ');
+}
+
+/**
+ * Extracts Coursera certificate evidence across all public layers:
+ * 1. JSON-LD structured data (<script type="application/ld+json">)
+ * 2. Next.js hydration payload (__NEXT_DATA__)
+ * 3. Apollo / React state hydration (window.__APOLLO_STATE__)
+ * 4. Redux / Flux window.App store
+ * 5. Open Graph, Twitter, and description meta tags
+ * 6. HTML DOM text and accomplishment certificate containers
+ * 7. Verification URL path
+ */
+function extractCourseraVerificationData(html, url) {
+  const result = {
+    credentialId: null,
+    courseTitle: null,
+    learnerName: null,
+    completionConfirmed: false,
+    issuer: 'Coursera',
+    source: null,
+    isGenericOrBlocked: false,
+  };
+
+  if (!html || typeof html !== 'string') return result;
+
+  // 1. Extract verification code from URL path
+  const urlMatches = [
+    (url || '').match(/\/verify\/([A-Za-z0-9_-]+)/i),
+    (url || '').match(/\/account\/accomplishments\/verify\/([A-Za-z0-9_-]+)/i),
+    (url || '').match(/\/account\/accomplishments\/certificate\/([A-Za-z0-9_-]+)/i),
+    (url || '').match(/\/account\/accomplishments\/specialization\/certificate\/([A-Za-z0-9_-]+)/i),
+  ];
+  for (const m of urlMatches) {
+    if (m && m[1]) {
+      result.credentialId = m[1].trim();
+      break;
+    }
+  }
+
+  // 2. Check for JSON-LD structured data
+  const jsonLdRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let jsonLdMatch;
+  while ((jsonLdMatch = jsonLdRegex.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(jsonLdMatch[1].trim());
+      const items = Array.isArray(data) ? data : [data];
+      for (const item of items) {
+        if (!item || typeof item !== 'object') continue;
+        if (
+          item['@type'] === 'EducationalOccupationalCredential' ||
+          item['@type'] === 'Course' ||
+          item['@type'] === 'Achievement' ||
+          item.credentialCategory ||
+          item.educationalLevel
+        ) {
+          result.source = result.source || 'JSON_LD';
+          if (item.name) result.courseTitle = item.name;
+          if (item.recipient?.name) result.learnerName = item.recipient.name;
+          if (item.credentialSubject?.name) result.learnerName = item.credentialSubject.name;
+          if (item.identifier) result.credentialId = String(item.identifier);
+          if (item.validFrom || item.dateCreated || item.educationalLevel || item.recognizedBy) {
+            result.completionConfirmed = true;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Check for Next.js hydration data (__NEXT_DATA__)
+  const nextDataMatch = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (nextDataMatch) {
+    try {
+      const nextData = JSON.parse(nextDataMatch[1]);
+      const pageProps = nextData?.props?.pageProps;
+      if (pageProps) {
+        const accomplishment = pageProps.accomplishment || pageProps.certificate || pageProps.courseCertificate || pageProps;
+        if (accomplishment) {
+          result.source = result.source || 'NEXT_DATA';
+          if (accomplishment.verifyCode || accomplishment.id) {
+            result.credentialId = accomplishment.verifyCode || accomplishment.id;
+          }
+          if (accomplishment.courseName || accomplishment.title || pageProps.courseName || pageProps.title) {
+            result.courseTitle = accomplishment.courseName || accomplishment.title || pageProps.courseName || pageProps.title;
+          }
+          if (accomplishment.learnerName || accomplishment.userName || accomplishment.recipientName || pageProps.learnerName || pageProps.userName) {
+            result.learnerName = accomplishment.learnerName || accomplishment.userName || accomplishment.recipientName || pageProps.learnerName || pageProps.userName;
+          }
+          if (accomplishment.completedAt || accomplishment.issuedAt || accomplishment.grade || accomplishment.isCompleted) {
+            result.completionConfirmed = true;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 4. Check for Apollo GraphQL hydration state (window.__APOLLO_STATE__)
+  const apolloMatch = html.match(/window\.__APOLLO_STATE__\s*=\s*(\{[\s\S]*?\});\s*(?:window\.|\n|<\/script>)/);
+  if (apolloMatch) {
+    try {
+      const apollo = JSON.parse(apolloMatch[1]);
+      for (const [key, val] of Object.entries(apollo)) {
+        if (!val || typeof val !== 'object') continue;
+        const type = val.__typename || '';
+        if (
+          type.includes('Accomplishment') ||
+          type.includes('Certificate') ||
+          type.includes('CourseCertificate') ||
+          key.includes('Accomplishment') ||
+          key.includes('Certificate')
+        ) {
+          result.source = result.source || 'APOLLO_STATE';
+          if (val.courseName || val.name || val.title) {
+            result.courseTitle = val.courseName || val.name || val.title;
+          }
+          if (val.learnerName || val.recipientName || val.fullName) {
+            result.learnerName = val.learnerName || val.recipientName || val.fullName;
+          }
+          if (val.verifyCode || val.code || val.id) {
+            result.credentialId = val.verifyCode || val.code || val.id;
+          }
+          if (val.completedAt || val.issuedAt || val.grade || val.isCompleted || val.passed) {
+            result.completionConfirmed = true;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 5. Check for window.App / Redux / Flux store hydration
+  const appMatch = html.match(/window\.App\s*=\s*(\{[\s\S]*?\});\s*(?:window\.|\n|<\/script>)/);
+  if (appMatch) {
+    try {
+      const app = JSON.parse(appMatch[1]);
+      const stores = app?.context?.dispatcher?.stores;
+      if (stores) {
+        const accStore = stores.AccomplishmentStore || stores.CertificateStore || stores.CourseStore;
+        if (accStore) {
+          result.source = result.source || 'APP_STORE';
+          if (accStore.courseName || accStore.title) result.courseTitle = accStore.courseName || accStore.title;
+          if (accStore.learnerName || accStore.recipientName) result.learnerName = accStore.learnerName || accStore.recipientName;
+          if (accStore.verifyCode || accStore.id) result.credentialId = accStore.verifyCode || accStore.id;
+          if (accStore.completedAt || accStore.grade) result.completionConfirmed = true;
+        }
+      }
+    } catch {}
+  }
+
+  // 6. Check Meta tags
+  const ogTitleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+                       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i);
+  const ogDescMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+                      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i);
+  const titleTagMatch = html.match(/<title>([^<]*)<\/title>/i);
+
+  const ogTitle = ogTitleMatch ? decodeHtmlEntities(ogTitleMatch[1].trim()) : '';
+  const ogDesc = ogDescMatch ? decodeHtmlEntities(ogDescMatch[1].trim()) : '';
+  const pageTitle = titleTagMatch ? decodeHtmlEntities(titleTagMatch[1].trim()) : '';
+
+  const isGenericMarketing =
+    ogTitle.includes('Coursera | Online Courses & Credentials From Top Educators') ||
+    ogDesc.includes('Learn online and earn valuable credentials from top universities');
+
+  if (isGenericMarketing) {
+    result.isGenericOrBlocked = true;
+  } else {
+    const textSources = [ogTitle, pageTitle, ogDesc].filter(Boolean);
+    for (const text of textSources) {
+      if (!result.courseTitle) {
+        const courseRegexes = [
+          /(?:Certificate(?:\s+for|\s+in|:)?)\s+([A-Za-z0-9\s:,'._\-]+?)(?:\s+(?:by|earned by|authorized by|offered by)|\s*\||$)/i,
+          /([A-Za-z0-9\s:,'._\-]+?)\s+(?:Course Certificate|Specialization Certificate)/i,
+        ];
+        for (const cr of courseRegexes) {
+          const cm = text.match(cr);
+          if (cm && cm[1] && cm[1].trim().length > 3 && !cm[1].toLowerCase().includes('online course')) {
+            result.courseTitle = cm[1].trim();
+            result.source = result.source || 'META_TAGS';
+            break;
+          }
+        }
+      }
+
+      if (!result.learnerName) {
+        const learnerRegexes = [
+          /(?:earned by|completed by|issued to)\s+([A-Za-z\s.'-]+?)(?:\s+(?:for|on|in|authorized by)|\s*\||$)/i,
+          /^([A-Za-z\s.'-]+?)'s\s+(?:Certificate|Course Certificate|Specialization)/i,
+        ];
+        for (const lr of learnerRegexes) {
+          const lm = text.match(lr);
+          if (lm && lm[1] && lm[1].trim().length > 2) {
+            result.learnerName = lm[1].trim();
+            result.source = result.source || 'META_TAGS';
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // 7. Check HTML DOM text and accomplishment evidence
+  const textWithoutScripts = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  const accomplishmentEvidenceInDom =
+    (textWithoutScripts.toLowerCase().includes('coursera') || html.toLowerCase().includes('coursera')) &&
+    (textWithoutScripts.toLowerCase().includes('completed the online course') ||
+     textWithoutScripts.toLowerCase().includes('has successfully completed') ||
+     textWithoutScripts.toLowerCase().includes('an online non-credit course authorized by') ||
+     textWithoutScripts.toLowerCase().includes('confirmed the identity of this individual') ||
+     textWithoutScripts.toLowerCase().includes('course certificate') ||
+     textWithoutScripts.toLowerCase().includes('specialization certificate') ||
+     textWithoutScripts.toLowerCase().includes('grade achieved') ||
+     textWithoutScripts.toLowerCase().includes('verified certificate'));
+
+  if (accomplishmentEvidenceInDom) {
+    result.completionConfirmed = true;
+    result.source = result.source || 'HTML_DOM';
+  }
+
+  return result;
+}
+
+/**
  * 2. Coursera Verification Adapter
  */
 function courseraAdapter({ html, url, certificateId, certificateName, studentName, httpStatus }) {
   const normHtml = (html || '').toLowerCase();
   const certIdClean = certificateId ? String(certificateId).trim() : '';
 
+  // 1. Check for explicit negative indicators from Coursera portal
   const negativeIndicators = [
     'we couldn\'t find a record of this accomplishment',
     'we could not find a record',
     'invalid certificate',
     'certificate does not exist',
     'has been revoked',
+    'accomplishment not found',
   ];
 
   for (const indicator of negativeIndicators) {
@@ -196,28 +436,64 @@ function courseraAdapter({ html, url, certificateId, certificateName, studentNam
     }
   }
 
-  // Match certificate code in URL path or page content
-  const idMatched = certIdClean
-    ? containsExactCredentialId(html, certIdClean) || containsExactCredentialId(url, certIdClean)
-    : false;
+  // 2. Check for anti-bot / login wall / captcha
+  const isLoginOrCaptcha =
+    normHtml.includes('please log in to continue') ||
+    normHtml.includes('recaptcha') ||
+    normHtml.includes('arkose') ||
+    normHtml.includes('perimeterx') ||
+    normHtml.includes('cf-browser-verification') ||
+    normHtml.includes('challenge-running');
 
+  // 3. Extract deep structured verification evidence from Coursera response
+  const extracted = extractCourseraVerificationData(html, url);
+
+  // 4. Exact certificate ID match
+  let idMatched = false;
+  if (certIdClean) {
+    idMatched =
+      containsExactCredentialId(url, certIdClean) ||
+      containsExactCredentialId(html, certIdClean) ||
+      (extracted.credentialId && normalizeCredentialId(extracted.credentialId) === normalizeCredentialId(certIdClean));
+  }
+
+  // If a specific certificate ID was given in certificate record, but Coursera page's extracted ID conflicts, flag mismatch
+  if (certIdClean && extracted.credentialId && normalizeCredentialId(extracted.credentialId) !== normalizeCredentialId(certIdClean)) {
+    idMatched = false;
+  }
+
+  // 5. Course / Certificate title match
   const courseNorm = normalizeText(certificateName);
-  const nameMatched = courseNorm.length > 3
-    ? normalizeText(html).includes(courseNorm)
+  const nameMatchedInRawHtml = courseNorm.length > 3 ? normalizeText(html).includes(courseNorm) : false;
+  const nameMatchedInExtracted = courseNorm.length > 3 && extracted.courseTitle
+    ? (normalizeText(extracted.courseTitle).includes(courseNorm) || courseNorm.includes(normalizeText(extracted.courseTitle)))
     : false;
+  const nameMatched = nameMatchedInRawHtml || nameMatchedInExtracted;
 
+  // 6. Learner / Student name match
   const studentNorm = normalizeText(studentName);
-  const holderMatched = studentNorm.length > 2
-    ? normalizeText(html).includes(studentNorm)
+  const holderMatchedInRawHtml = studentNorm.length > 2 ? normalizeText(html).includes(studentNorm) : false;
+  const holderMatchedInExtracted = studentNorm.length > 2 && extracted.learnerName
+    ? (normalizeText(extracted.learnerName).includes(studentNorm) || studentNorm.includes(normalizeText(extracted.learnerName)))
     : false;
+  const holderMatched = holderMatchedInRawHtml || holderMatchedInExtracted;
 
+  // 7. Official accomplishment proof confirmation
   const officialAccomplishmentFound =
-    normHtml.includes('coursera') &&
-    (normHtml.includes('completed') ||
-     normHtml.includes('accomplishment') ||
-     normHtml.includes('verified certificate'));
+    extracted.completionConfirmed ||
+    (normHtml.includes('coursera') &&
+      (normHtml.includes('completed') ||
+       normHtml.includes('accomplishment') ||
+       normHtml.includes('verified certificate') ||
+       normHtml.includes('specialization certificate') ||
+       normHtml.includes('course certificate')));
 
-  if (idMatched && (nameMatched || holderMatched || officialAccomplishmentFound)) {
+  // Positive Verification Rule:
+  // Requires:
+  // 1) Exact ID matched (mandatory)
+  // 2) At least one strong corroborating piece of evidence: (nameMatched OR holderMatched OR officialAccomplishmentFound)
+  // 3) Must NOT be a purely generic unrendered marketing page or login block
+  if (idMatched && (nameMatched || holderMatched || (officialAccomplishmentFound && !extracted.isGenericOrBlocked))) {
     return {
       status: 'VERIFIED',
       confidence: 95,
@@ -230,10 +506,34 @@ function courseraAdapter({ html, url, certificateId, certificateName, studentNam
         holderNameMatched: holderMatched,
         issuerMatched: true,
         verificationPageFound: officialAccomplishmentFound,
+        extractionSource: extracted.source || 'HTML_DOM',
+        extractedCourseTitle: extracted.courseTitle,
+        extractedLearnerName: extracted.learnerName,
+        extractedCredentialId: extracted.credentialId,
       },
     };
   }
 
+  // If page is a login wall, CAPTCHA, or client-rendered SPA without server-side payload
+  if (isLoginOrCaptcha || extracted.isGenericOrBlocked) {
+    return {
+      status: 'MANUAL_REVIEW',
+      confidence: 50,
+      reason: 'Official Coursera portal reached, but automated extraction was prevented by dynamic client rendering or access challenge.',
+      evidence: {
+        trustedDomain: true,
+        httpStatus,
+        certificateIdMatched: idMatched,
+        certificateNameMatched: nameMatched,
+        holderNameMatched: holderMatched,
+        issuerMatched: true,
+        verificationPageFound: false,
+        isBlockedOrGeneric: true,
+      },
+    };
+  }
+
+  // Official portal reached (HTTP 200) but evidence cannot be conclusively matched
   return {
     status: 'MANUAL_REVIEW',
     confidence: 50,
@@ -1220,14 +1520,14 @@ async function verifyIssuerCertificate({
       });
     }
 
-    // Read bounded slice of response body (max 64KB)
+    // Read bounded slice of response body (max 1MB)
     let bodySnippet = '';
     try {
       if (response.body) {
         const reader = response.body.getReader();
         let bytesRead = 0;
         const chunks = [];
-        while (bytesRead < 65536) {
+        while (bytesRead < 1048576) {
           const { done, value } = await reader.read();
           if (done || !value) break;
           chunks.push(value);
@@ -1318,5 +1618,7 @@ module.exports = {
   normalizeText,
   normalizeCredentialId,
   containsExactCredentialId,
+  decodeHtmlEntities,
+  extractCourseraVerificationData,
   verifyIssuerCertificate,
 };

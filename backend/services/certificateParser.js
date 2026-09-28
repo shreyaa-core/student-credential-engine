@@ -180,8 +180,26 @@ async function renderPdfToImageBuffers(filePathOrBuffer, maxPages = 5) {
  */
 async function parseImage(imageSource, timeoutMs = OCR_TIMEOUT_MS) {
   try {
+    let sourceToProcess = imageSource;
+
+    // Enhance low-resolution images for higher OCR character recognition
+    try {
+      const { loadImage, createCanvas } = require('@napi-rs/canvas');
+      const img = await loadImage(imageSource);
+      const maxDim = Math.max(img.width, img.height);
+      if (maxDim > 0 && maxDim < 1400) {
+        const scale = Math.min(3, Math.max(2, Math.round(1800 / maxDim)));
+        const canvas = createCanvas(img.width * scale, img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, img.width * scale, img.height * scale);
+        sourceToProcess = canvas.toBuffer('image/png');
+      }
+    } catch (preprocessErr) {
+      // If canvas preprocessing fails, fall back to original sourceToProcess
+    }
+
     return await withTimeout(
-      Tesseract.recognize(imageSource, 'eng').then((res) => cleanExtractedText(res.data?.text || '')),
+      Tesseract.recognize(sourceToProcess, 'eng').then((res) => cleanExtractedText(res.data?.text || '')),
       timeoutMs,
       `OCR processing exceeded timeout limit of ${timeoutMs / 1000}s`
     );

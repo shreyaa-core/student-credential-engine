@@ -1,7 +1,7 @@
 # STEP 7: FINAL 20-CERTIFICATE ACCEPTANCE TEST RESULTS
 
-**Test Run Timestamp**: 2026-09-22T05:38:45.514Z  
-**Total Duration**: 11.98s  
+**Test Run Timestamp**: 2026-09-28T06:11:39.266Z  
+**Total Duration**: 34.05s  
 **Overall Acceptance Result**: **20/20 Cases Passed (100.0%)**
 
 ---
@@ -84,6 +84,6 @@ Evaluating Certificate Authenticity Verification (Positive Class = `VERIFIED`, N
    - All 12 non-verified certificates were strictly excluded.
 
 4. **Database Cleanup Verification**:
-   - Baseline Table Counts: `{"profiles":"3","certificates":"2","certificate_skills":"2","badges":"0","verification_logs":"7","skills":"7","activity_logs":"1","activity_skills":"0"}`
-   - Post-Test Table Counts: `{"profiles":"3","certificates":"2","certificate_skills":"2","badges":"0","verification_logs":"7","skills":"7","activity_logs":"1","activity_skills":"0"}`
+   - Baseline Table Counts: `{"profiles":"5","certificates":"8","certificate_skills":"5","badges":"6","verification_logs":"26","skills":"7","activity_logs":"3","activity_skills":"0"}`
+   - Post-Test Table Counts: `{"profiles":"5","certificates":"8","certificate_skills":"5","badges":"6","verification_logs":"26","skills":"7","activity_logs":"3","activity_skills":"0"}`
    - Exact Row Count Integrity: **100% Match (Zero Residual Test Rows)**.

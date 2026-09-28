@@ -45,6 +45,7 @@ export const uploadCertificate = async (file, certificateData, issuer = null, st
     const certId = certificateData.certificate_id || certificateData.certificateId || '';
     const date = certificateData.issue_date || certificateData.issueDate || '';
     const url = certificateData.verification_url || certificateData.verificationUrl || '';
+    const purp = certificateData.purpose || '';
     const sid = certificateData.student_id || studentId || '';
 
     if (certName) formData.append('certificate_name', certName);
@@ -52,6 +53,7 @@ export const uploadCertificate = async (file, certificateData, issuer = null, st
     if (certId) formData.append('certificate_id', certId);
     if (date) formData.append('issue_date', date);
     if (url) formData.append('verification_url', url);
+    if (purp) formData.append('purpose', purp);
     if (sid) formData.append('student_id', sid);
   } else {
     // Positional signature fallback
