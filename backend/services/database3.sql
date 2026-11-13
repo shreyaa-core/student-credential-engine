@@ -1,1 +1,0 @@
-CREATE DATABASE student_credential_engine;
